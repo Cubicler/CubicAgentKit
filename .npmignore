@@ -1,0 +1,36 @@
+# Source files - we only want to publish the compiled dist folder
+src/
+tests/
+*.test.ts
+*.spec.ts
+
+# Development files
+.github/
+.gitignore
+.git/
+tsconfig.json
+jest.config.json
+
+# Development dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage reports
+coverage/
+.nyc_output
+
+# IDE and OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Example files (optional - you may want to keep these)
+examples/
+
+# Keep only these files for npm:
+# - dist/
+# - README.md
+# - LICENSE
+# - package.json

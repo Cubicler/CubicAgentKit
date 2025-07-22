@@ -1,9 +1,17 @@
 {
   "name": "@cubicler/cubicagentkit",
-  "version": "0.0.1",
-  "description": "A Node.js/Express library for creating CubicAgent services that integrate with Cubicler",
+  "version": "1.0.0",
+  "description": "A TypeScript SDK for creating CubicAgents that integrate seamlessly with the Cubicler AI orchestration framework",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -12,17 +20,33 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:verbose": "jest --verbose",
-    "prepublishOnly": "npm run build"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "preversion": "npm run test",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "cubicler",
     "ai",
     "agent",
     "express",
-    "typescript"
+    "typescript",
+    "sdk",
+    "library",
+    "nodejs",
+    "api",
+    "integration"
   ],
   "author": "hainayanda",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/hainayanda/CubicAgentKit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hainayanda/CubicAgentKit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hainayanda/CubicAgentKit/issues"
+  },
   "dependencies": {
     "axios": "^1.6.0",
     "express": "^4.18.2"

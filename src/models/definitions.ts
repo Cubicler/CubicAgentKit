@@ -42,7 +42,9 @@ export interface ParameterDefinition {
     required?: boolean;
     items?: ParameterDefinition;
     properties?: Record<string, ParameterDefinition>;
-}export interface AgentFunctionDefinition {
+}
+
+export interface AgentFunctionDefinition {
     name: string;
     description: string;
     parameters: {
