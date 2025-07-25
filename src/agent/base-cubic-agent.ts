@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import { AgentConfig, CubicAgentOptions, CallHandler, AgentRequest, AgentResponse, CallContext, ICubiclerClient } from '../models/types';
 import { Logger } from '../utils/logger';
+import { prependAgentHeader } from '../utils/agent-header';
 
 /**
  * Base class for shared functionality between CubicAgent implementations
@@ -51,6 +52,17 @@ export abstract class BaseCubicAgent {
           });
         }
 
+        // Create enhanced request with mandatory agent header
+        const enhancedPrompt = prependAgentHeader(
+          this.config.agentName,
+          request.prompt
+        );
+        
+        const enhancedRequest: AgentRequest = {
+          ...request,
+          prompt: enhancedPrompt
+        };
+
         // Create context for provider interaction
         const context: CallContext = {
           getProviderSpec: (providerName: string) => this.client.getProviderSpec(providerName),
@@ -59,7 +71,7 @@ export abstract class BaseCubicAgent {
         };
 
         // Execute user handler
-        const responseMessage = await this.callHandler(request, context);
+        const responseMessage = await this.callHandler(enhancedRequest, context);
         
         const response: AgentResponse = {
           message: responseMessage

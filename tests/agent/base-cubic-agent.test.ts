@@ -114,7 +114,11 @@ describe('BaseCubicAgent', () => {
 
     it('should process valid request with handler', async () => {
       agent.onCall(async (request, context) => {
-        expect(request.prompt).toBe('Test prompt');
+        // Verify the agent header is prepended to the prompt
+        expect(request.prompt).toContain('# Note');
+        expect(request.prompt).toContain('You are an agent with identifier "test-agent"');
+        expect(request.prompt).toContain('other agents or custom entities');
+        expect(request.prompt).toContain('Test prompt');
         expect(request.providers).toHaveLength(1);
         expect(request.messages).toHaveLength(1);
         return 'Handler response';
@@ -134,6 +138,34 @@ describe('BaseCubicAgent', () => {
       expect(response.body).toEqual({
         message: 'Handler response'
       });
+    });
+
+    it('should prepend agent header to original prompt', async () => {
+      let receivedPrompt = '';
+      
+      agent.onCall(async (request) => {
+        receivedPrompt = request.prompt;
+        return 'Test response';
+      });
+
+      const requestBody = {
+        prompt: 'Original user prompt content',
+        providers: [{ name: 'test-provider', description: 'Test provider' }],
+        messages: [{ sender: 'user', content: 'Hello' }]
+      };
+
+      await request(agent.getApp())
+        .post('/call')
+        .send(requestBody)
+        .expect(200);
+
+      // Verify the header was prepended correctly
+      expect(receivedPrompt).toMatch(/^# Note\n/);
+      expect(receivedPrompt).toContain('identifier "test-agent"');
+      expect(receivedPrompt).toContain('other agents or custom entities');
+      expect(receivedPrompt).toContain('Original user prompt content');
+      expect(receivedPrompt.indexOf('# Note')).toBe(0);
+      expect(receivedPrompt.indexOf('Original user prompt content')).toBeGreaterThan(0);
     });
 
     it('should provide context with provider spec access', async () => {

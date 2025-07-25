@@ -127,7 +127,9 @@ describe('CubicAgent', () => {
 
     it('should inherit call endpoint functionality', async () => {
       agent.onCall(async (request) => {
-        return `Processed: ${request.prompt}`;
+        // Extract the original prompt from the enhanced prompt with header
+        const originalPrompt = request.prompt.replace(/^# Note\nYou are an agent with identifier "test-standalone-agent"[.\s\S]*?\n\n/, '');
+        return `Processed: ${originalPrompt}`;
       });
 
       const requestBody = {

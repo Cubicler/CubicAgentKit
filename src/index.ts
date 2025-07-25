@@ -28,3 +28,4 @@ export type {
 
 // Utility exports
 export { Logger } from './utils/logger';
+export { generateAgentHeader, prependAgentHeader } from './utils/agent-header';

@@ -1,12 +1,12 @@
-const express = require('express');
-const { CubicAgentExpress, CubiclerClient } = require('../dist/index');
+import express, { json } from 'express';
+import { CubicAgentExpress, CubiclerClient } from '../dist/index';
 
 // Create your own Express app
 const app = express();
 const port = 3001;
 
 // Add your own middleware
-app.use(express.json());
+app.use(json());
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
   next();

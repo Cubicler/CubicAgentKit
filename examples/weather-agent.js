@@ -1,4 +1,4 @@
-const { CubicAgent } = require('../dist/index');
+import { CubicAgent } from '../dist/index';
 
 // Create a simple weather agent
 const agent = new CubicAgent({

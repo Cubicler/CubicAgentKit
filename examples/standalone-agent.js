@@ -1,4 +1,4 @@
-const { CubicAgent, CubiclerClient } = require('../dist/index');
+import { CubicAgent, CubiclerClient } from '../dist/index';
 
 // Create Cubicler client
 const cubiclerClient = new CubiclerClient({
