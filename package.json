@@ -1,6 +1,6 @@
 {
   "name": "@cubicler/cubicagentkit",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "A TypeScript SDK for creating CubicAgents that integrate seamlessly with the Cubicler AI orchestration framework",
   "main": "dist/index.js",
