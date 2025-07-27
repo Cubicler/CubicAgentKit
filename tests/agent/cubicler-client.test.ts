@@ -1,25 +1,28 @@
 import axios from 'axios';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CubiclerClient } from '../../src/agent/cubicler-client';
 import { ProviderSpecResponse, FunctionCallResult } from '../../src/models/types';
 
 // Mock axios
-jest.mock('axios', () => ({
-  create: jest.fn(() => ({
-    get: jest.fn(),
-    post: jest.fn(),
-  })),
-  get: jest.fn(),
-  post: jest.fn(),
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => ({
+      get: vi.fn(),
+      post: vi.fn(),
+    })),
+    get: vi.fn(),
+    post: vi.fn(),
+  }
 }));
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as any;
 const mockedAxiosInstance = {
-  get: jest.fn(),
-  post: jest.fn(),
+  get: vi.fn(),
+  post: vi.fn(),
 };
 
 // Mock axios.create to return our mocked instance
-(mockedAxios.create as jest.Mock).mockReturnValue(mockedAxiosInstance);
+mockedAxios.create.mockReturnValue(mockedAxiosInstance);
 
 describe('CubiclerClient', () => {
   let client: CubiclerClient;
@@ -30,7 +33,7 @@ describe('CubiclerClient', () => {
       5000,
       2
     );
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Reset the mocked axios instance completely
     mockedAxiosInstance.get.mockReset();
     mockedAxiosInstance.post.mockReset();

@@ -1,5 +1,6 @@
 import express from 'express';
 import request from 'supertest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CubicAgentExpress } from '../../src/agent/cubic-agent-express';
 import { ICubiclerClient, ProviderSpecResponse, FunctionCallResult } from '../../src/models/types';
 
@@ -160,7 +161,7 @@ describe('CubicAgentExpress', () => {
     });
 
     it('should provide context access like base class', async () => {
-      const getProviderSpecSpy = jest.spyOn(mockClient, 'getProviderSpec');
+      const getProviderSpecSpy = vi.spyOn(mockClient, 'getProviderSpec');
 
       agent.onCall(async (request, context) => {
         const spec = await context.getProviderSpec('weather_api');

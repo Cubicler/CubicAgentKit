@@ -1,10 +1,9 @@
-// Jest setup file
-import { jest } from '@jest/globals';
+import { beforeEach, beforeAll, afterAll, vi } from 'vitest';
 
 // Global test setup
 beforeEach(() => {
   // Clear all mocks before each test
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // Silence console logs during tests unless explicitly needed
@@ -13,9 +12,9 @@ const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;
 
 beforeAll(() => {
-  console.log = jest.fn();
-  console.error = jest.fn();
-  console.warn = jest.fn();
+  console.log = vi.fn();
+  console.error = vi.fn();
+  console.warn = vi.fn();
 });
 
 afterAll(() => {
@@ -23,6 +22,3 @@ afterAll(() => {
   console.error = originalConsoleError;
   console.warn = originalConsoleWarn;
 });
-
-// Increase timeout for server-related tests
-jest.setTimeout(10000);

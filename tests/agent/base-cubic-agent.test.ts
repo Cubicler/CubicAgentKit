@@ -1,5 +1,6 @@
 import express from 'express';
 import request from 'supertest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BaseCubicAgent } from '../../src/agent/base-cubic-agent';
 import { AgentConfig, ICubiclerClient, ProviderSpecResponse, FunctionCallResult } from '../../src/models/types';
 
@@ -169,7 +170,7 @@ describe('BaseCubicAgent', () => {
     });
 
     it('should provide context with provider spec access', async () => {
-      const getProviderSpecSpy = jest.spyOn(mockClient, 'getProviderSpec');
+      const getProviderSpecSpy = vi.spyOn(mockClient, 'getProviderSpec');
       
       agent.onCall(async (request, context) => {
         const spec = await context.getProviderSpec('weather_api');
@@ -192,7 +193,7 @@ describe('BaseCubicAgent', () => {
     });
 
     it('should provide context with function execution', async () => {
-      const executeFunctionSpy = jest.spyOn(mockClient, 'executeFunction');
+      const executeFunctionSpy = vi.spyOn(mockClient, 'executeFunction');
       
       agent.onCall(async (request, context) => {
         const result = await context.executeFunction('mockFunction', { param1: 'value1' });
@@ -241,8 +242,8 @@ describe('BaseCubicAgent', () => {
 
     it('should handle context errors gracefully', async () => {
       const errorClient = {
-        getProviderSpec: jest.fn().mockRejectedValue(new Error('Provider error')),
-        executeFunction: jest.fn()
+        getProviderSpec: vi.fn().mockRejectedValue(new Error('Provider error')),
+        executeFunction: vi.fn()
       };
 
       const errorAgent = new TestCubicAgent({
@@ -275,7 +276,7 @@ describe('BaseCubicAgent', () => {
 
   describe('onCall method', () => {
     it('should register handler function', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       agent.onCall(handler);
       // Handler is registered (tested implicitly through call endpoint tests)
       expect(typeof agent.onCall).toBe('function');

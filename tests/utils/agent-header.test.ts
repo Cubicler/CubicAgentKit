@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { generateAgentHeader, prependAgentHeader } from '../../src/utils/agent-header';
 
 describe('Agent Header Utils', () => {

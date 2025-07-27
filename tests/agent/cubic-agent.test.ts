@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CubicAgent } from '../../src/agent/cubic-agent';
 import { ICubiclerClient, ProviderSpecResponse, FunctionCallResult } from '../../src/models/types';
 
@@ -46,13 +47,11 @@ describe('CubicAgent', () => {
     });
   });
 
-  afterEach((done) => {
+  afterEach(async () => {
     if (agent) {
       agent.stop();
       // Give some time for cleanup
-      setTimeout(() => done(), 50);
-    } else {
-      done();
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
   });
 
@@ -68,50 +67,56 @@ describe('CubicAgent', () => {
   });
 
   describe('server lifecycle', () => {
-    it('should start and stop server', (done) => {
+    it('should start and stop server', async () => {
       let serverStarted = false;
 
-      agent.start(() => {
-        serverStarted = true;
-        expect(serverStarted).toBe(true);
-        
-        // Test that server is actually running
-        request(agent.getApp())
-          .get('/health')
-          .expect(200)
-          .end((err) => {
-            if (err) return done(err);
-            
-            // Stop the server
-            agent.stop();
-            done();
-          });
+      await new Promise<void>((resolve) => {
+        agent.start(() => {
+          serverStarted = true;
+          expect(serverStarted).toBe(true);
+          
+          // Test that server is actually running
+          request(agent.getApp())
+            .get('/health')
+            .expect(200)
+            .end((err) => {
+              if (err) throw err;
+              
+              // Stop the server
+              agent.stop();
+              resolve();
+            });
+        });
       });
     });
 
-    it('should handle multiple starts/stops gracefully', (done) => {
-      agent.start(() => {
-        agent.stop();
-        
-        // Start again on different port to avoid conflicts
-        const agent2 = new CubicAgent({
-          port: currentPort++,
-          agentName: 'test-agent-2',
-          logLevel: 'info',
-          cubiclerClient: mockClient
-        });
+    it('should handle multiple starts/stops gracefully', async () => {
+      await new Promise<void>((resolve) => {
+        agent.start(() => {
+          agent.stop();
+          
+          // Start again on different port to avoid conflicts
+          const agent2 = new CubicAgent({
+            port: currentPort++,
+            agentName: 'test-agent-2',
+            logLevel: 'info',
+            cubiclerClient: mockClient
+          });
 
-        agent2.start(() => {
-          agent2.stop();
-          setTimeout(() => done(), 50); // Give cleanup time
+          agent2.start(() => {
+            agent2.stop();
+            setTimeout(() => resolve(), 50); // Give cleanup time
+          });
         });
       });
     });
   });
 
   describe('inherited functionality', () => {
-    beforeEach((done) => {
-      agent.start(() => done());
+    beforeEach(async () => {
+      await new Promise<void>((resolve) => {
+        agent.start(() => resolve());
+      });
     });
 
     it('should inherit health endpoint', async () => {
@@ -156,7 +161,7 @@ describe('CubicAgent', () => {
       expect(typeof app).toBe('function'); // Express app is a function
     });
 
-    it('should allow adding custom routes to the app', (done) => {
+    it('should allow adding custom routes to the app', async () => {
       const app = agent.getApp();
       
       // Add custom route
@@ -164,21 +169,23 @@ describe('CubicAgent', () => {
         res.json({ custom: 'route' });
       });
 
-      agent.start(() => {
-        request(app)
-          .get('/custom')
-          .expect(200)
-          .end((err, res) => {
-            if (err) return done(err);
-            expect(res.body).toEqual({ custom: 'route' });
-            done();
-          });
+      await new Promise<void>((resolve) => {
+        agent.start(() => {
+          request(app)
+            .get('/custom')
+            .expect(200)
+            .end((err, res) => {
+              if (err) throw err;
+              expect(res.body).toEqual({ custom: 'route' });
+              resolve();
+            });
+        });
       });
     });
   });
 
   describe('configuration', () => {
-    it('should use provided port', (done) => {
+    it('should use provided port', async () => {
       const customAgent = new CubicAgent({
         port: currentPort++,
         agentName: 'custom-port-agent',
@@ -186,14 +193,16 @@ describe('CubicAgent', () => {
         cubiclerClient: mockClient
       });
 
-      customAgent.start(() => {
-        // The fact that it starts without error indicates it's using the port
-        customAgent.stop();
-        setTimeout(() => done(), 50);
+      await new Promise<void>((resolve) => {
+        customAgent.start(() => {
+          // The fact that it starts without error indicates it's using the port
+          customAgent.stop();
+          setTimeout(() => resolve(), 50);
+        });
       });
     });
 
-    it('should use provided agent name', (done) => {
+    it('should use provided agent name', async () => {
       const customAgent = new CubicAgent({
         port: currentPort++,
         agentName: 'my-custom-agent',
@@ -201,19 +210,21 @@ describe('CubicAgent', () => {
         cubiclerClient: mockClient
       });
 
-      customAgent.start(async () => {
-        try {
-          const response = await request(customAgent.getApp())
-            .get('/health')
-            .expect(200);
+      await new Promise<void>((resolve) => {
+        customAgent.start(async () => {
+          try {
+            const response = await request(customAgent.getApp())
+              .get('/health')
+              .expect(200);
 
-          expect(response.body.agent).toBe('my-custom-agent');
-          customAgent.stop();
-          setTimeout(() => done(), 50);
-        } catch (error) {
-          customAgent.stop();
-          setTimeout(() => done(error), 50);
-        }
+            expect(response.body.agent).toBe('my-custom-agent');
+            customAgent.stop();
+            setTimeout(() => resolve(), 50);
+          } catch (error) {
+            customAgent.stop();
+            setTimeout(() => { throw error; }, 50);
+          }
+        });
       });
     });
   });
