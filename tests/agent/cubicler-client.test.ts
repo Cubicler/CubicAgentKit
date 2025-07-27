@@ -181,8 +181,14 @@ describe('CubiclerClient', () => {
         .rejects.toThrow();
 
       const endTime = Date.now();
-      // Should have waited at least 1 second (first retry) + 2 seconds (second retry) = 3 seconds total
-      expect(endTime - startTime).toBeGreaterThan(1000); // At least 1 second for one retry
+      // With retryAttempts = 2:
+      // - Attempt 1 fails immediately 
+      // - Wait 1 second (attempt * 1000 = 1 * 1000)
+      // - Attempt 2 fails
+      // - No more waits since attempt 2 == retryAttempts
+      // So total time should be ~1000ms, allow some variance
+      expect(endTime - startTime).toBeGreaterThanOrEqual(900); // At least 900ms to account for timing variance
+      expect(endTime - startTime).toBeLessThan(1500); // But less than 1500ms to ensure it's not doing extra waits
     });
   });
 });
