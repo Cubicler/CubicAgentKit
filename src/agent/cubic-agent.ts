@@ -1,18 +1,20 @@
-import express, { Express } from 'express';
-import { AgentConfig } from '../models/types';
-import { BaseCubicAgent } from './base-cubic-agent';
+import type { Express } from 'express';
+import type { Server } from 'http';
+import express from 'express';
+import type { AgentConfig } from '../models/types.js';
+import { BaseCubicAgent } from './base-cubic-agent.js';
 
 /**
  * Standalone CubicAgent that creates and manages its own Express server
  */
 export class CubicAgent extends BaseCubicAgent {
   private app: Express;
-  private server?: any;
+  private server?: Server;
   private port: number;
 
   constructor(config: AgentConfig) {
     super(config);
-    
+
     this.port = config.port;
     this.app = express();
     this.app.use(express.json());

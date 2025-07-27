@@ -1,4 +1,4 @@
-import { JSONValue } from "./types";
+import type { JSONValue } from './types.js';
 
 // Detailed provider definition types (for internal use)
 

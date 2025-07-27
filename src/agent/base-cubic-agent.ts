@@ -1,7 +1,7 @@
-import { Express, Request, Response } from 'express';
-import { AgentConfig, CubicAgentOptions, CallHandler, AgentRequest, AgentResponse, CallContext, ICubiclerClient } from '../models/types';
-import { Logger } from '../utils/logger';
-import { prependAgentHeader } from '../utils/agent-header';
+import type { Express, Request, Response } from 'express';
+import type { AgentConfig, CubicAgentOptions, CallHandler, AgentRequest, AgentResponse, CallContext, ICubiclerClient, JSONObject } from '../models/types.js';
+import { Logger } from '../utils/logger.js';
+import { prependAgentHeader } from '../utils/agent-header.js';
 
 /**
  * Base class for shared functionality between CubicAgent implementations
@@ -38,17 +38,17 @@ export abstract class BaseCubicAgent {
     app.post('/call', async (req: Request, res: Response) => {
       try {
         if (!this.callHandler) {
-          return res.status(500).json({ 
-            error: 'Agent handler not configured. Call onCall() first.' 
+          return res.status(500).json({
+            error: 'Agent handler not configured. Call onCall() first.'
           });
         }
 
         const request: AgentRequest = req.body;
-        
+
         // Validate request format
         if (!request.prompt || !request.providers || !request.messages) {
-          return res.status(400).json({ 
-            error: 'Invalid request format. Expected: { prompt, providers, messages }' 
+          return res.status(400).json({
+            error: 'Invalid request format. Expected: { prompt, providers, messages }'
           });
         }
 
@@ -57,7 +57,7 @@ export abstract class BaseCubicAgent {
           this.config.agentName,
           request.prompt
         );
-        
+
         const enhancedRequest: AgentRequest = {
           ...request,
           prompt: enhancedPrompt
@@ -66,13 +66,13 @@ export abstract class BaseCubicAgent {
         // Create context for provider interaction
         const context: CallContext = {
           getProviderSpec: (providerName: string) => this.client.getProviderSpec(providerName),
-          executeFunction: (functionName: string, parameters: any) => 
+          executeFunction: (functionName: string, parameters: JSONObject) =>
             this.client.executeFunction(functionName, parameters)
         };
 
         // Execute user handler
         const responseMessage = await this.callHandler(enhancedRequest, context);
-        
+
         const response: AgentResponse = {
           message: responseMessage
         };
@@ -81,7 +81,7 @@ export abstract class BaseCubicAgent {
 
       } catch (error) {
         this.logger.error('Error processing agent call:', error);
-        res.status(500).json({ 
+        res.status(500).json({
           error: 'Internal server error',
           details: error instanceof Error ? error.message : 'Unknown error'
         });

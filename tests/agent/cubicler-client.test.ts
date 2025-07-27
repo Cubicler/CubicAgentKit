@@ -8,17 +8,17 @@ vi.mock('axios', () => ({
   default: {
     create: vi.fn(() => ({
       get: vi.fn(),
-      post: vi.fn(),
+      post: vi.fn()
     })),
     get: vi.fn(),
-    post: vi.fn(),
+    post: vi.fn()
   }
 }));
 
 const mockedAxios = axios as any;
 const mockedAxiosInstance = {
   get: vi.fn(),
-  post: vi.fn(),
+  post: vi.fn()
 };
 
 // Mock axios.create to return our mocked instance
@@ -72,8 +72,8 @@ describe('CubiclerClient', () => {
     };
 
     it('should successfully fetch provider spec', async () => {
-      mockedAxiosInstance.get.mockResolvedValueOnce({ 
-        data: mockProviderSpec 
+      mockedAxiosInstance.get.mockResolvedValueOnce({
+        data: mockProviderSpec
       });
 
       const result = await client.getProviderSpec('weather_api');
@@ -87,7 +87,7 @@ describe('CubiclerClient', () => {
     it('should retry on failure and eventually succeed', async () => {
       // Reset all mocks to ensure clean state
       mockedAxiosInstance.get.mockReset();
-      
+
       mockedAxiosInstance.get
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({ data: mockProviderSpec });
@@ -101,7 +101,7 @@ describe('CubiclerClient', () => {
     it('should throw error after max retries', async () => {
       // Reset all mocks to ensure clean state
       mockedAxiosInstance.get.mockReset();
-      
+
       const error = new Error('Persistent network error');
       mockedAxiosInstance.get.mockRejectedValue(error);
 
@@ -135,8 +135,8 @@ describe('CubiclerClient', () => {
     };
 
     it('should successfully execute function', async () => {
-      mockedAxiosInstance.post.mockResolvedValueOnce({ 
-        data: mockFunctionResult 
+      mockedAxiosInstance.post.mockResolvedValueOnce({
+        data: mockFunctionResult
       });
 
       const parameters = { city: 'London', country: 'UK' };

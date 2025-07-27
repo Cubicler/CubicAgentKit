@@ -143,7 +143,7 @@ describe('BaseCubicAgent', () => {
 
     it('should prepend agent header to original prompt', async () => {
       let receivedPrompt = '';
-      
+
       agent.onCall(async (request) => {
         receivedPrompt = request.prompt;
         return 'Test response';
@@ -171,7 +171,7 @@ describe('BaseCubicAgent', () => {
 
     it('should provide context with provider spec access', async () => {
       const getProviderSpecSpy = vi.spyOn(mockClient, 'getProviderSpec');
-      
+
       agent.onCall(async (request, context) => {
         const spec = await context.getProviderSpec('weather_api');
         expect(spec.context).toBe('Mock context for weather_api');
@@ -194,7 +194,7 @@ describe('BaseCubicAgent', () => {
 
     it('should provide context with function execution', async () => {
       const executeFunctionSpy = vi.spyOn(mockClient, 'executeFunction');
-      
+
       agent.onCall(async (request, context) => {
         const result = await context.executeFunction('mockFunction', { param1: 'value1' });
         expect(typeof result).toBe('object');

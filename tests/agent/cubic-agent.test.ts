@@ -74,14 +74,14 @@ describe('CubicAgent', () => {
         agent.start(() => {
           serverStarted = true;
           expect(serverStarted).toBe(true);
-          
+
           // Test that server is actually running
           request(agent.getApp())
             .get('/health')
             .expect(200)
             .end((err) => {
               if (err) throw err;
-              
+
               // Stop the server
               agent.stop();
               resolve();
@@ -94,7 +94,7 @@ describe('CubicAgent', () => {
       await new Promise<void>((resolve) => {
         agent.start(() => {
           agent.stop();
-          
+
           // Start again on different port to avoid conflicts
           const agent2 = new CubicAgent({
             port: currentPort++,
@@ -163,7 +163,7 @@ describe('CubicAgent', () => {
 
     it('should allow adding custom routes to the app', async () => {
       const app = agent.getApp();
-      
+
       // Add custom route
       app.get('/custom', (req, res) => {
         res.json({ custom: 'route' });

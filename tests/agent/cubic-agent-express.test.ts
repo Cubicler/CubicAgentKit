@@ -41,7 +41,7 @@ describe('CubicAgentExpress', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    
+
     mockClient = new MockCubiclerClient();
     agent = new CubicAgentExpress(app, {
       agentName: 'test-express-agent',
@@ -103,7 +103,7 @@ describe('CubicAgentExpress', () => {
       // Create new app with middleware
       const middlewareApp = express();
       middlewareApp.use(express.json());
-      
+
       // Add custom middleware
       middlewareApp.use((req, res, next) => {
         res.setHeader('X-Custom-Header', 'test-value');
@@ -195,7 +195,7 @@ describe('CubicAgentExpress', () => {
     it('should handle multiple agents gracefully (first one wins)', async () => {
       // Set up first agent handler
       agent.onCall(async () => 'First agent response');
-      
+
       // Create second agent on the same app
       const secondAgent = new CubicAgentExpress(app, {
         agentName: 'second-agent',

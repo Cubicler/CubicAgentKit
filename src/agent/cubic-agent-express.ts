@@ -1,6 +1,6 @@
-import { Express } from 'express';
-import { CubicAgentOptions } from '../models/types';
-import { BaseCubicAgent } from './base-cubic-agent';
+import type { Express } from 'express';
+import type { CubicAgentOptions } from '../models/types.js';
+import { BaseCubicAgent } from './base-cubic-agent.js';
 
 /**
  * CubicAgent wrapper for existing Express applications
@@ -10,7 +10,7 @@ export class CubicAgentExpress extends BaseCubicAgent {
 
   constructor(app: Express, options: CubicAgentOptions) {
     super(options);
-    
+
     this.app = app;
     this.setupRoutes(this.app);
   }

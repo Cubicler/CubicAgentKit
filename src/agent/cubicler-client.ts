@@ -1,5 +1,6 @@
-import axios, { AxiosInstance } from 'axios';
-import { ProviderSpecResponse, FunctionCallResult, JSONObject, ICubiclerClient } from '../models/types';
+import type { AxiosInstance } from 'axios';
+import axios from 'axios';
+import type { ProviderSpecResponse, FunctionCallResult, JSONObject, ICubiclerClient } from '../models/types.js';
 
 export class CubiclerClient implements ICubiclerClient {
   private client: AxiosInstance;
@@ -13,13 +14,13 @@ export class CubiclerClient implements ICubiclerClient {
   ) {
     this.timeout = timeout;
     this.retryAttempts = retryAttempts;
-    
+
     this.client = axios.create({
       baseURL: cubiclerEndpoint,
       timeout: this.timeout,
       headers: {
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json'
+      }
     });
   }
 
@@ -35,7 +36,7 @@ export class CubiclerClient implements ICubiclerClient {
         return response.data;
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt < this.retryAttempts) {
           // Wait before retrying (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, attempt * 1000));
@@ -58,7 +59,7 @@ export class CubiclerClient implements ICubiclerClient {
         return response.data;
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt < this.retryAttempts) {
           // Wait before retrying (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, attempt * 1000));

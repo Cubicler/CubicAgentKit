@@ -11,7 +11,7 @@ export function generateAgentHeader(agentName: string): string {
  * Prepends the mandatory agent header to the user prompt
  */
 export function prependAgentHeader(
-  agentName: string, 
+  agentName: string,
   originalPrompt: string
 ): string {
   const header = generateAgentHeader(agentName);

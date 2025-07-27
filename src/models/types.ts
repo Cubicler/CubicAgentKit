@@ -1,4 +1,4 @@
-import { AgentFunctionDefinition } from "./definitions";
+import type { AgentFunctionDefinition } from './definitions.js';
 
 // Forward declaration for circular dependency
 export interface ICubiclerClient {

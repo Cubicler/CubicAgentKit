@@ -8,36 +8,36 @@ export class Logger {
     return levels.indexOf(level) >= levels.indexOf(this.level);
   }
 
-  private formatMessage(level: LogLevel, message: string, data?: any): string {
+  private formatMessage(level: LogLevel, message: string, data?: unknown): string {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-    
+
     if (data) {
       return `${prefix} ${message} ${JSON.stringify(data)}`;
     }
-    
+
     return `${prefix} ${message}`;
   }
 
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
       console.log(this.formatMessage('debug', message, data));
     }
   }
 
-  info(message: string, data?: any): void {
+  info(message: string, data?: unknown): void {
     if (this.shouldLog('info')) {
       console.log(this.formatMessage('info', message, data));
     }
   }
 
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: unknown): void {
     if (this.shouldLog('warn')) {
       console.warn(this.formatMessage('warn', message, data));
     }
   }
 
-  error(message: string, data?: any): void {
+  error(message: string, data?: unknown): void {
     if (this.shouldLog('error')) {
       console.error(this.formatMessage('error', message, data));
     }

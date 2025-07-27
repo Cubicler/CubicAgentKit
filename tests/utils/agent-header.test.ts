@@ -6,7 +6,7 @@ describe('Agent Header Utils', () => {
     it('should generate a proper agent identity header', () => {
       const agentName = 'test-agent';
       const header = generateAgentHeader(agentName);
-      
+
       expect(header).toContain('# Note');
       expect(header).toContain(`You are an agent with identifier "${agentName}"`);
       expect(header).toContain(`sender "${agentName}"`);
@@ -18,7 +18,7 @@ describe('Agent Header Utils', () => {
     it('should handle different agent names', () => {
       const agentName = 'weather-assistant';
       const header = generateAgentHeader(agentName);
-      
+
       expect(header).toContain(`identifier "${agentName}"`);
       expect(header).toContain(`sender "${agentName}"`);
     });
@@ -26,7 +26,7 @@ describe('Agent Header Utils', () => {
     it('should have consistent format', () => {
       const header = generateAgentHeader('my-agent');
       const lines = header.split('\n');
-      
+
       expect(lines[0]).toBe('# Note');
       expect(lines[1]).toMatch(/^You are an agent with identifier/);
       expect(lines[2]).toBe('');
@@ -38,9 +38,9 @@ describe('Agent Header Utils', () => {
     it('should prepend header to original prompt', () => {
       const agentName = 'test-agent';
       const originalPrompt = 'Answer the user\'s question about weather.';
-      
+
       const result = prependAgentHeader(agentName, originalPrompt);
-      
+
       expect(result).toContain('# Note');
       expect(result).toContain(`identifier "${agentName}"`);
       expect(result).toContain(originalPrompt);
@@ -55,9 +55,9 @@ describe('Agent Header Utils', () => {
 - Special characters: !@#$%
 - Unicode: 🌟✨
 - Formatting`;
-      
+
       const result = prependAgentHeader(agentName, originalPrompt);
-      
+
       expect(result).toContain(originalPrompt);
       expect(result.endsWith(originalPrompt)).toBe(true);
     });
@@ -65,9 +65,9 @@ describe('Agent Header Utils', () => {
     it('should work with empty prompt', () => {
       const agentName = 'empty-test';
       const originalPrompt = '';
-      
+
       const result = prependAgentHeader(agentName, originalPrompt);
-      
+
       expect(result).toContain('# Note');
       expect(result).toContain(`identifier "${agentName}"`);
       expect(result.endsWith('')).toBe(true);

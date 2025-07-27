@@ -34,7 +34,7 @@ describe('Logger', () => {
     it('should log debug messages when level is debug', () => {
       const logger = new Logger('debug');
       logger.debug('test message');
-      
+
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[.*\] \[DEBUG\] test message/)
       );
@@ -43,7 +43,7 @@ describe('Logger', () => {
     it('should log info messages when level is info or lower', () => {
       const logger = new Logger('info');
       logger.info('test message');
-      
+
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[.*\] \[INFO\] test message/)
       );
@@ -52,7 +52,7 @@ describe('Logger', () => {
     it('should log warn messages when level is warn or lower', () => {
       const logger = new Logger('warn');
       logger.warn('test message');
-      
+
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[.*\] \[WARN\] test message/)
       );
@@ -61,7 +61,7 @@ describe('Logger', () => {
     it('should log error messages when level is error or lower', () => {
       const logger = new Logger('error');
       logger.error('test message');
-      
+
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[.*\] \[ERROR\] test message/)
       );
@@ -70,14 +70,14 @@ describe('Logger', () => {
     it('should not log debug when level is info', () => {
       const logger = new Logger('info');
       logger.debug('test message');
-      
+
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
 
     it('should not log info when level is warn', () => {
       const logger = new Logger('warn');
       logger.info('test message');
-      
+
       expect(consoleLogSpy).not.toHaveBeenCalled();
     });
   });
@@ -87,7 +87,7 @@ describe('Logger', () => {
       const logger = new Logger('info');
       const testData = { key: 'value', number: 123 };
       logger.info('test message', testData);
-      
+
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[.*\] \[INFO\] test message {"key":"value","number":123}/)
       );
@@ -98,7 +98,7 @@ describe('Logger', () => {
     it('should include ISO timestamp in log messages', () => {
       const logger = new Logger('info');
       logger.info('test message');
-      
+
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\]/)
       );

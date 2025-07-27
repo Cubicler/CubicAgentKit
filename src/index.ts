@@ -1,8 +1,8 @@
 // Main exports
-export { CubicAgent } from './agent/cubic-agent';
-export { CubicAgentExpress } from './agent/cubic-agent-express';
-export { BaseCubicAgent } from './agent/base-cubic-agent';
-export { CubiclerClient } from './agent/cubicler-client';
+export { CubicAgent } from './agent/cubic-agent.js';
+export { CubicAgentExpress } from './agent/cubic-agent-express.js';
+export { BaseCubicAgent } from './agent/base-cubic-agent.js';
+export { CubiclerClient } from './agent/cubicler-client.js';
 
 // Type exports
 export type {
@@ -18,14 +18,14 @@ export type {
   JSONObject,
   JSONValue,
   FunctionCallResult
-} from './models/types';
+} from './models/types.js';
 
-export type { 
+export type {
   AgentFunctionDefinition,
   ParameterDefinition,
-  PayloadDefinition 
-} from './models/definitions';
+  PayloadDefinition
+} from './models/definitions.js';
 
 // Utility exports
-export { Logger } from './utils/logger';
-export { generateAgentHeader, prependAgentHeader } from './utils/agent-header';
+export { Logger } from './utils/logger.js';
+export { generateAgentHeader, prependAgentHeader } from './utils/agent-header.js';
