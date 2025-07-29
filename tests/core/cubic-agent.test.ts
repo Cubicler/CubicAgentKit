@@ -26,26 +26,90 @@ describe('CubicAgent', () => {
   });
 
   describe('start', () => {
-    it('should initialize client and start server with handler', async () => {
+    it('should start server with handler without initializing client', async () => {
       await cubicAgent.start(mockHandler);
 
-      expect(mockClient.initializeCalled).toBe(true);
+      expect(mockClient.initializeCalled).toBe(false); // Client not initialized until first request
       expect(mockServer.startCalled).toBe(true);
       expect(mockServer.registeredHandler).toBeDefined();
-    });
-
-    it('should throw error if client initialization fails', async () => {
-      mockClient.shouldFailInitialize = true;
-
-      await expect(cubicAgent.start(mockHandler)).rejects.toThrow('Mock initialization failed');
-      expect(mockServer.startCalled).toBe(false);
     });
 
     it('should throw error if server start fails', async () => {
       mockServer.shouldFailStart = true;
 
       await expect(cubicAgent.start(mockHandler)).rejects.toThrow('Mock server start failed');
+      expect(mockClient.initializeCalled).toBe(false);
+    });
+  });
+
+  describe('lazy initialization', () => {
+    it('should initialize client only on first request', async () => {
+      await cubicAgent.start(mockHandler);
+      expect(mockClient.initializeCalled).toBe(false);
+
+      // First request should trigger initialization
+      const mockRequest = createMockAgentRequest();
+      await mockServer.simulateRequest(mockRequest);
       expect(mockClient.initializeCalled).toBe(true);
+    });
+
+    it('should initialize client only once across multiple requests', async () => {
+      const mockRequest = createMockAgentRequest();
+      let initializeCallCount = 0;
+      
+      // Override the mock to count calls
+      const originalInitialize = mockClient.initialize;
+      mockClient.initialize = vi.fn().mockImplementation(async () => {
+        initializeCallCount++;
+        return originalInitialize.call(mockClient);
+      });
+
+      await cubicAgent.start(mockHandler);
+
+      // Make multiple requests
+      await mockServer.simulateRequest(mockRequest);
+      await mockServer.simulateRequest(mockRequest);
+      await mockServer.simulateRequest(mockRequest);
+
+      expect(initializeCallCount).toBe(1);
+      expect(mockClient.initializeCalled).toBe(true);
+    });
+
+    it('should throw error if client initialization fails on first request', async () => {
+      mockClient.shouldFailInitialize = true;
+
+      await cubicAgent.start(mockHandler);
+      const mockRequest = createMockAgentRequest();
+
+      await expect(mockServer.simulateRequest(mockRequest)).rejects.toThrow('Mock initialization failed');
+      expect(mockClient.initializeCalled).toBe(true);
+    });
+
+    it('should retry initialization after failure', async () => {
+      const mockRequest = createMockAgentRequest();
+      let initializeCallCount = 0;
+
+      // Make initialization fail on first call but succeed on subsequent calls
+      mockClient.initialize = vi.fn().mockImplementation(async () => {
+        initializeCallCount++;
+        if (initializeCallCount === 1) {
+          throw new Error('Mock initialization failed');
+        }
+        mockClient.initializeCalled = true;
+      });
+
+      await cubicAgent.start(mockHandler);
+
+      // First request should fail
+      await expect(mockServer.simulateRequest(mockRequest)).rejects.toThrow('Mock initialization failed');
+      expect(initializeCallCount).toBe(1);
+      expect(mockClient.initializeCalled).toBe(false);
+
+      // Second request should retry and succeed
+      const response = await mockServer.simulateRequest(mockRequest);
+      expect(initializeCallCount).toBe(2); // Should retry
+      expect(mockClient.initializeCalled).toBe(true);
+      expect(response).toBeDefined();
     });
   });
 
@@ -81,6 +145,7 @@ describe('CubicAgent', () => {
 
       const response = await mockServer.simulateRequest(mockRequest);
 
+      expect(mockClient.initializeCalled).toBe(true); // Should be initialized after first request
       expect(response).toEqual({
         timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
         type: 'text',

@@ -7,6 +7,8 @@ import { TrackingAgentClient } from './tracking-agent-client.js';
  * Handles HTTP server management and dispatch routing using composition
  */
 export class CubicAgent {
+  private isInitialized = false;
+
   /**
    * Creates a new CubicAgent instance
    * @param agentClient - The client for communicating with Cubicler
@@ -19,19 +21,18 @@ export class CubicAgent {
 
   /**
    * Start the agent server with the provided dispatch handler
-   * This method:
-   * 1. Initializes the AgentClient
-   * 2. Starts the HTTP server with a wrapped handler that provides a fresh tracking client per request
+   * This method starts the HTTP server with a wrapped handler that provides a fresh tracking client per request
+   * The AgentClient is initialized lazily on the first request to ensure it's only done when needed
    * 
    * @param handler - The dispatch handler function to process requests
    * @throws Error if startup fails (thrown up to implementer)
    */
   async start(handler: DispatchHandler): Promise<void> {
-    // Initialize the agent client connection to Cubicler
-    await this.agentClient.initialize();
-
     // Start the HTTP server with the wrapped handler
     await this.server.start(async (request) => {
+      // Ensure the agent client is initialized (only happens once)
+      await this.ensureInitialized();
+      
       // Create a fresh tracking client for this specific request
       const trackingClient = new TrackingAgentClient(this.agentClient);
       
@@ -55,6 +56,23 @@ export class CubicAgent {
         }
       };
     });
+  }
+
+  /**
+   * Ensures the agent client is initialized, but only once
+   * @private
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.isInitialized) {
+      try {
+        await this.agentClient.initialize();
+        this.isInitialized = true;
+      } catch (error) {
+        // Don't set isInitialized to true if initialization fails
+        // This allows future requests to retry initialization
+        throw error;
+      }
+    }
   }
 
   /**
