@@ -64,14 +64,8 @@ export class CubicAgent {
    */
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
-      try {
-        await this.agentClient.initialize();
-        this.isInitialized = true;
-      } catch (error) {
-        // Don't set isInitialized to true if initialization fails
-        // This allows future requests to retry initialization
-        throw error;
-      }
+      await this.agentClient.initialize();
+      this.isInitialized = true;
     }
   }
 

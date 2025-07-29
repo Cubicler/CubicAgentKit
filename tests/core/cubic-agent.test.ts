@@ -58,10 +58,10 @@ describe('CubicAgent', () => {
       let initializeCallCount = 0;
       
       // Override the mock to count calls
-      const originalInitialize = mockClient.initialize;
+      const originalInitialize = mockClient.initialize.bind(mockClient);
       mockClient.initialize = vi.fn().mockImplementation(async () => {
         initializeCallCount++;
-        return originalInitialize.call(mockClient);
+        return originalInitialize();
       });
 
       await cubicAgent.start(mockHandler);
