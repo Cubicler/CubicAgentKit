@@ -1,128 +1,62 @@
-import js from '@eslint/js';
-import globals from 'globals';
-import tseslint from '@typescript-eslint/eslint-plugin';
-import tsparser from '@typescript-eslint/parser';
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
-export default [
-  // Base JavaScript config
-  js.configs.recommended,
-  
-  // TypeScript source files configuration (with project)
+export default tseslint.config(
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
   {
-    files: ['src/**/*.ts', 'src/**/*.tsx'],
     languageOptions: {
-      parser: tsparser,
       parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
         project: './tsconfig.json',
-      },
-      globals: {
-        ...globals.node,
-        ...globals.es2022,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: {
-      '@typescript-eslint': tseslint,
-    },
+  },
+  {
+    files: ['src/**/*.ts', 'tests/**/*.ts'],
     rules: {
       // TypeScript specific rules
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-inferrable-types': 'off',
-      '@typescript-eslint/no-var-requires': 'error',
-      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/prefer-readonly': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
       
       // General rules
-      'no-console': 'off', // Allow console for logging utilities
-      'no-unused-vars': 'off', // Let TypeScript handle this
+      'no-console': 'off', // We use console for logging in server
+      'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
-      'object-shorthand': 'error',
-      'prefer-template': 'error',
+      'eqeqeq': ['error', 'always'],
+      'curly': ['error', 'all'],
     },
   },
-  
-  // Test files configuration
   {
-    files: ['tests/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
-    languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-        // Don't use project for test files since they're excluded from tsconfig
-      },
-      globals: {
-        ...globals.node,
-        ...globals.jest,
-      },
-    },
-    plugins: {
-      '@typescript-eslint': tseslint,
-    },
+    files: ['tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off', // Allow any in tests
+      '@typescript-eslint/no-non-null-assertion': 'off', // Allow non-null assertion in tests
+      '@typescript-eslint/no-unsafe-assignment': 'off', // Allow unsafe assignment in tests
+      '@typescript-eslint/no-unsafe-member-access': 'off', // Allow unsafe member access in tests
+      '@typescript-eslint/no-unsafe-call': 'off', // Allow unsafe calls in tests
+      '@typescript-eslint/no-unsafe-argument': 'off', // Allow unsafe arguments in tests
+      '@typescript-eslint/require-await': 'off', // Allow async functions without await in tests
       '@typescript-eslint/no-unused-vars': 'off', // Allow unused vars in tests
-      'no-unused-vars': 'off', // Allow unused vars in tests
-      'no-console': 'off',
     },
   },
-  
-  // JavaScript files configuration
-  {
-    files: ['**/*.js', '**/*.mjs'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        ...globals.node,
-        ...globals.es2022,
-      },
-    },
-  },
-  
-  // Config files configuration (vitest.config.ts, etc.)
-  {
-    files: ['*.config.ts', '*.config.js'],
-    languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-      },
-      globals: {
-        ...globals.node,
-        ...globals.es2022,
-      },
-    },
-    plugins: {
-      '@typescript-eslint': tseslint,
-    },
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      'no-console': 'off',
-    },
-  },
-  
-  // Example files configuration
-  {
-    files: ['examples/**/*.js'],
-    rules: {
-      'no-console': 'off', // Allow console in examples
-      'no-unused-vars': 'off', // Allow unused vars in examples for demo purposes
-    },
-  },
-  
-  // Ignore patterns
   {
     ignores: [
-      'dist/**',
-      'coverage/**',
-      'node_modules/**',
+      'dist/',
+      'node_modules/',
+      '*.js',
       '*.d.ts',
+      'coverage/',
+      '.nyc_output/',
+      'tsup.config.ts',
+      'vitest.config.ts',
     ],
-  },
-];
+  }
+);

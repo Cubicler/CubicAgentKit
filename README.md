@@ -1,402 +1,348 @@
 # CubicAgentKit
 
-A TypeScript SDK for creating CubicAgents that integrate seamlessly with the Cubicler AI orchestration framework.
+[![npm version](https://badge.fury.io/js/cubicagentkit.svg)](https://badge.fury.io/js/cubicagentkit)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-## Overview
+A modern Node.js library for creating AI agents that integrate seamlessly with **Cubicler 2.0**. Built with TypeScript, composition patterns, and dependency injection for maximum flexibility and testability.
 
-CubicAgentKit simplifies building **CubicAgent** services for the Cubicler AI orchestration framework. The SDK provides a clean, modular TypeScript library that abstracts the complexity of Cubicler's Agent Integration API contract, allowing developers to focus on AI logic rather than infrastructure concerns.
+## 🚀 Features
 
-The SDK provides two flexible integration approaches:
+- **🧱 Simple & Complete**: `CubicAgent` class handles all Cubicler integration
+- **🔌 Composition-Based**: Uses dependency injection for easy testing and flexibility
+- **📡 Built-in HTTP Client**: `AxiosAgentClient` with middleware support for Cubicler MCP communication
+- **🌐 Built-in HTTP Server**: `ExpressAgentServer` with middleware support for agent endpoints
+- **📊 Tool Call Tracking**: Automatic tracking of tool usage per request
+- **🛡️ Type-Safe**: Full TypeScript support with strict typing
+- **🔍 Error Transparent**: All errors thrown up to implementers for custom handling
+- **⚡ Developer Experience**: Simplified `RawAgentResponse` interface (kit adds metadata)
 
-1. **Standalone Agent**: Creates and manages its own Express server
-2. **Express Integration**: Integrates with existing Express applications
-
-## Installation
+## 📦 Installation
 
 ```bash
-npm install @cubicler/cubicagentkit
+npm install cubicagentkit
 ```
 
-## Key Features
-
-- 🚀 **Two integration approaches**: Standalone server or Express middleware
-- 🔧 **Dependency injection**: Injectable CubiclerClient for easy testing and mocking
-- 📝 **Full TypeScript support**: Complete type safety and IntelliSense
-- 🔄 **Automatic retries**: Built-in retry logic with exponential backoff for Cubicler communication
-- 🪵 **Structured logging**: Configurable logging levels with timestamps
-- ✅ **Testing friendly**: Comprehensive test suite with easy mocking support
-- 🏗️ **Clean architecture**: Modular design with separation of concerns
-- 📦 **Contract compliance**: Implements exact Cubicler Agent Integration API contract
-
-## Quick Start
-
-### 1. Standalone Agent
+## 🏃‍♂️ Quick Start
 
 ```typescript
-import { CubicAgent, CubiclerClient } from '@cubicler/cubicagentkit';
+import { 
+  CubicAgent, 
+  AxiosAgentClient, 
+  ExpressAgentServer,
+  AgentRequest, 
+  RawAgentResponse 
+} from 'cubicagentkit';
 
-// Create Cubicler client
-const cubiclerClient = new CubiclerClient(
-  'http://localhost:1503',
-  10000,  // timeout in ms
-  3       // retry attempts
-);
+// Create client and server with built-in implementations
+const client = new AxiosAgentClient('http://localhost:1503');
+const server = new ExpressAgentServer(3000, '/agent');
+const cubicAgent = new CubicAgent(client, server);
 
-// Create standalone agent
-const agent = new CubicAgent({
-  port: 3000,
-  agentName: 'my-weather-agent',
-  logLevel: 'info',
-  cubiclerClient: cubiclerClient
-});
-
-// Define agent behavior
-agent.onCall(async (request, context) => {
-  const { prompt, providers, messages } = request;
-  
-  // Get provider specifications and context
-  if (providers.some(p => p.name === 'weather_api')) {
-    const weatherSpec = await context.getProviderSpec('weather_api');
-    console.log('Weather context:', weatherSpec.context);
-    console.log('Available functions:', weatherSpec.functions);
+// Start server with dispatch handler
+try {
+  await cubicAgent.start(async (request, client, context) => {
+    const lastMessage = request.messages[request.messages.length - 1];
     
-    // Execute function through Cubicler
-    const weather = await context.executeFunction('getWeather', { 
-      city: 'London',
-      country: 'UK'
-    });
+    // Call Cubicler tools if needed
+    if (lastMessage.content?.includes('weather')) {
+      const weatherData = await client.callTool('weather_service.get_current_weather', {
+        city: 'Paris'
+      });
+      
+      return {
+        type: 'text',
+        content: `The weather is ${weatherData.temperature}°C (used ${context.toolCallCount} tools)`,
+        usedToken: 50
+      };
+    }
     
-    return `The weather in London is ${weather.conditions} with ${weather.temperature}°C`;
-  }
+    return {
+      type: 'text',
+      content: `Hello! You said: ${lastMessage.content}`,
+      usedToken: 25
+    };
+  });
   
-  return 'Hello from my CubicAgent!';
-});
-
-// Start the agent
-agent.start(() => {
-  console.log('Weather Agent is running on port 3000');
-});
-```
-
-### 2. Express Integration
-
-```typescript
-import express from 'express';
-import { CubicAgentExpress, CubiclerClient } from '@cubicler/cubicagentkit';
-
-// Create Express app
-const app = express();
-app.use(express.json());
-
-// Your custom routes
-app.get('/custom', (req, res) => {
-  res.json({ message: 'Custom endpoint' });
-});
-
-// Create Cubicler client
-const cubiclerClient = new CubiclerClient(
-  'http://localhost:1503',
-  10000,  // timeout in ms
-  3       // retry attempts
-);
-
-// Integrate CubicAgent
-const agent = new CubicAgentExpress(app, {
-  agentName: 'my-integrated-agent',
-  logLevel: 'info',
-  cubiclerClient: cubiclerClient
-});
-
-agent.onCall(async (request, context) => {
-  const { prompt, providers, messages } = request;
-  
-  // Your agent logic here - same as standalone agent
-  // The SDK handles the Cubicler integration automatically
-  return 'Response from integrated agent';
-});
-
-// Start Express server
-app.listen(3000, () => {
-  console.log('Express app with CubicAgent running on port 3000');
-});
-```
-
-## Project Structure
-
-```text
-cubic-agent-sdk/
-├── src/
-│   ├── index.ts              # Main exports
-│   ├── agent/                # Agent implementations
-│   │   ├── base-cubic-agent.ts     # Abstract base class
-│   │   ├── cubic-agent.ts          # Standalone agent
-│   │   ├── cubic-agent-express.ts  # Express integration
-│   │   └── cubicler-client.ts      # Cubicler API client
-│   ├── models/               # Type definitions
-│   │   ├── types.ts          # Main interfaces and types
-│   │   └── definitions.ts    # Function and provider definitions
-│   └── utils/                # Utilities
-│       └── logger.ts         # Structured logging
-├── tests/                    # Test suite (mirrors src structure)
-│   ├── agent/                # Agent tests
-│   └── utils/                # Utility tests
-├── dist/                     # Compiled JavaScript
-└── examples/                 # Example implementations
-```
-
-## Agent Integration Contract
-
-The SDK implements the exact Cubicler Agent Integration contract:
-
-### Required Endpoints
-
-- `POST /call` - Receives `AgentRequest`, returns `AgentResponse`
-- `GET /health` - Health check endpoint
-
-### Cubicler Communication
-
-- `GET /provider/:providerName/spec` - Get provider specs and context
-- `POST /execute/:functionName` - Execute functions through providers
-
-### Request/Response Format
-
-**AgentRequest:**
-
-```typescript
-{
-  prompt: string;           // System prompt with agent instructions
-  providers: Provider[];    // Available providers with descriptions
-  messages: Message[];      // Conversation history
+  console.log('✅ Agent started on http://localhost:3000/agent');
+} catch (error) {
+  console.error('❌ Failed to start agent:', error);
+  process.exit(1);
 }
 ```
 
-**AgentResponse:**
+## 🏗️ Architecture
 
-```typescript
-{
-  message: string;          // Agent's response message
-}
+CubicAgentKit follows a **composition-based architecture** with clean separation of concerns:
+
+```mermaid
+┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│   CubicAgent    │────│  AgentClient     │────│ AxiosAgentClient │
+│   (Orchestrator)│    │  (Interface)     │    │ (HTTP Client)    │
+└─────────────────┘    └──────────────────┘    └──────────────────┘
+         │
+         │              ┌──────────────────┐    ┌──────────────────┐
+         └──────────────│  AgentServer     │────│ExpressAgentServer│
+                        │  (Interface)     │    │ (HTTP Server)    │
+                        └──────────────────┘    └──────────────────┘
 ```
 
-## API Reference
+### Core Components
+
+- **`CubicAgent`**: Main orchestrator handling server lifecycle and request routing
+- **`AxiosAgentClient`**: HTTP client implementing Cubicler's MCP protocol  
+- **`ExpressAgentServer`**: HTTP server handling agent endpoint requests
+- **`TrackingAgentClient`**: Wrapper providing automatic tool call counting
+
+## 📝 API Reference
 
 ### CubicAgent
 
-Standalone agent that manages its own Express server.
-
-**Constructor:**
+Main class for creating and managing Cubicler agents.
 
 ```typescript
-new CubicAgent(config: AgentConfig)
-```
-
-**AgentConfig:**
-
-- `port: number` - Port to run the server on
-- `agentName: string` - Name of your agent
-- `cubiclerClient: ICubiclerClient` - Client for Cubicler communication
-- `logLevel?: LogLevel` - Logging level ('debug' | 'info' | 'warn' | 'error', default: 'info')
-
-**Methods:**
-
-- `onCall(handler: CallHandler): void` - Register request handler
-- `start(callback?: () => void): void` - Start the server
-- `stop(): void` - Stop the server
-- `getApp(): Express` - Get Express app instance for custom routes
-
-### CubicAgentExpress
-
-Agent wrapper for existing Express applications.
-
-**Constructor:**
-
-```typescript
-new CubicAgentExpress(app: Express, options: CubicAgentOptions)
-```
-
-**CubicAgentOptions:**
-
-- `agentName: string` - Name of your agent
-- `cubiclerClient: ICubiclerClient` - Client for Cubicler communication
-- `logLevel?: LogLevel` - Logging level ('debug' | 'info' | 'warn' | 'error', default: 'info')
-
-**Methods:**
-
-- `onCall(handler: CallHandler): void` - Register request handler
-- `getApp(): Express` - Get Express app instance
-
-### CubiclerClient
-
-HTTP client for communicating with Cubicler with automatic retry logic.
-
-**Constructor:**
-
-```typescript
-new CubiclerClient(
-  cubiclerEndpoint: string,
-  timeout?: number = 30000,
-  retryAttempts?: number = 3
-)
-```
-
-**Parameters:**
-
-- `cubiclerEndpoint: string` - Cubicler server endpoint (e.g., `http://localhost:1503`)
-- `timeout?: number` - Request timeout in milliseconds (default: 30000)
-- `retryAttempts?: number` - Number of retry attempts (default: 3)
-
-**Methods:**
-
-- `getProviderSpec(providerName: string): Promise<ProviderSpecResponse>` - Get provider specification
-- `executeFunction(functionName: string, parameters: JSONObject): Promise<FunctionCallResult>` - Execute provider function
-
-### CallHandler
-
-The function that processes agent requests:
-
-```typescript
-type CallHandler = (request: AgentRequest, context: CallContext) => Promise<string>;
-```
-
-**AgentRequest:**
-
-- `prompt: string` - The user's prompt
-- `providers: Provider[]` - Available providers
-- `messages: Message[]` - Conversation history
-
-**CallContext:**
-
-- `getProviderSpec(providerName: string): Promise<ProviderSpecResponse>` - Get provider specification and context
-- `executeFunction(functionName: string, parameters: JSONObject): Promise<FunctionCallResult>` - Execute provider function
-
-## Testing
-
-The SDK comes with a comprehensive test suite covering all major components:
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests with verbose output
-npm run test:verbose
-```
-
-### Test Structure
-
-The test suite mirrors the source structure for easy navigation:
-
-```text
-tests/
-├── agent/                    # Agent implementation tests
-│   ├── base-cubic-agent.test.ts
-│   ├── cubic-agent.test.ts
-│   ├── cubic-agent-express.test.ts
-│   └── cubicler-client.test.ts
-├── models/                   # Type and interface tests
-│   └── types.test.ts
-└── utils/                    # Utility tests
-    └── logger.test.ts
-```
-
-### Mocking
-
-The SDK is designed for easy testing with dependency injection:
-
-```typescript
-// Example test setup
-import { CubicAgent } from 'cubic-agent-sdk';
-
-class MockCubiclerClient implements ICubiclerClient {
-  async getProviderSpec(providerName: string): Promise<ProviderSpecResponse> {
-    return {
-      context: `Mock context for ${providerName}`,
-      functions: [/* mock functions */]
-    };
-  }
-
-  async executeFunction(functionName: string, parameters: any): Promise<any> {
-    return { result: `Mock result for ${functionName}` };
-  }
+class CubicAgent {
+  constructor(agentClient: AgentClient, server: AgentServer)
+  
+  async start(handler: DispatchHandler): Promise<void>
+  async stop(): Promise<void>
 }
 
-const mockClient = new MockCubiclerClient();
-const agent = new CubicAgent({
-  port: 3000,
-  agentName: 'test-agent',
-  cubiclerClient: mockClient
+type DispatchHandler = (
+  request: AgentRequest,
+  client: AgentClient,
+  context: CallContext
+) => Promise<RawAgentResponse>
+```
+
+### AxiosAgentClient
+
+HTTP client for Cubicler MCP communication with middleware support.
+
+```typescript
+class AxiosAgentClient implements AgentClient {
+  constructor(url: string, timeout?: number)
+  
+  useMiddleware(middleware: RequestMiddleware): this
+  async initialize(): Promise<void>
+  async callTool(toolName: string, parameters: JSONObject): Promise<JSONValue>
+}
+```
+
+### ExpressAgentServer
+
+Express-based HTTP server with middleware support.
+
+```typescript
+class ExpressAgentServer implements AgentServer {
+  constructor(port: number, endpoint?: string)
+  
+  useMiddleware(middleware: ExpressMiddleware): this
+  async start(handler: RequestHandler): Promise<void>
+  async stop(): Promise<void>
+}
+```
+
+## 🔧 Advanced Usage
+
+### With Middleware
+
+Add authentication, CORS, logging, and other middleware:
+
+```typescript
+// Client middleware for authentication
+const client = new AxiosAgentClient('http://localhost:1503')
+  .useMiddleware((config) => {
+    config.headers.Authorization = `Bearer ${process.env.CUBICLER_TOKEN}`;
+    return config;
+  });
+
+// Server middleware for CORS
+const server = new ExpressAgentServer(3000, '/agent')
+  .useMiddleware((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+  });
+
+const cubicAgent = new CubicAgent(client, server);
+```
+
+### Tool Call Examples
+
+Access Cubicler's internal tools and MCP servers:
+
+```typescript
+await cubicAgent.start(async (request, client, context) => {
+  // Get available servers
+  const servers = await client.callTool('cubicler.available_servers', {});
+  
+  // Fetch tools from a specific server
+  const tools = await client.callTool('cubicler.fetch_server_tools', { 
+    serverIdentifier: 'weather_service' 
+  });
+  
+  // Call tools from MCP servers
+  const weather = await client.callTool('weather_service.get_current_weather', {
+    city: 'Paris',
+    country: 'France'
+  });
+  
+  // Access tool call count
+  console.log(`Used ${context.toolCallCount} tools in this request`);
+  
+  return {
+    type: 'text',
+    content: `Weather: ${weather.temperature}°C`,
+    usedToken: 100
+  };
 });
 ```
 
-## Development
+### Custom Implementations
 
-### Building
+Create custom clients and servers by implementing the interfaces:
+
+```typescript
+import { AgentClient, AgentServer } from 'cubicagentkit';
+
+class CustomMQTTClient implements AgentClient {
+  async initialize(): Promise<void> {
+    // Custom MQTT initialization
+  }
+  
+  async callTool(toolName: string, parameters: JSONObject): Promise<JSONValue> {
+    // Custom tool calling via MQTT
+  }
+}
+
+class CustomFastifyServer implements AgentServer {
+  async start(handler: RequestHandler): Promise<void> {
+    // Custom Fastify server setup
+  }
+  
+  async stop(): Promise<void> {
+    // Custom server shutdown
+  }
+}
+
+const customAgent = new CubicAgent(
+  new CustomMQTTClient(),
+  new CustomFastifyServer()
+);
+```
+
+## 📊 Type Definitions
+
+### Request & Response Types
+
+```typescript
+// What your handler receives
+interface AgentRequest {
+  agent: {
+    identifier: string;
+    name: string;
+    description: string;
+    prompt: string;
+  };
+  tools: AgentTool[];
+  servers: ServerInfo[];
+  messages: Message[];
+}
+
+// What your handler returns (simplified)
+interface RawAgentResponse {
+  type: 'text' | 'null';
+  content: string | null;
+  usedToken: number;
+}
+
+// What the kit sends to Cubicler (complete)
+interface AgentResponse {
+  timestamp: string; // Added by kit
+  type: 'text' | 'null';
+  content: string | null;
+  metadata: {
+    usedToken: number; // From your handler
+    usedTools: number; // Added by kit from tracking
+  };
+}
+```
+
+## 🧪 Testing
+
+The library is thoroughly tested with 25+ unit tests. Run tests with:
 
 ```bash
-# Build the project
+npm test          # Run in watch mode
+npm run test:run  # Run once
+npm run test:ui   # Run with UI
+```
+
+### Mock Implementations
+
+Use provided mocks for testing your agents:
+
+```typescript
+import { MockAgentClient, MockAgentServer } from 'cubicagentkit/tests/mocks';
+
+// Test your dispatch handler
+const mockClient = new MockAgentClient();
+const mockServer = new MockAgentServer();
+const testAgent = new CubicAgent(mockClient, mockServer);
+
+mockClient.mockToolCall('weather_service.get_weather', { temperature: '22°C' });
+
+// Test your handler logic
+```
+
+## 🔨 Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode
+npm run dev
+
+# Build the library
 npm run build
 
-# Build in watch mode for development
-npm run dev
+# Lint code
+npm run lint
+
+# Run full check (lint + test + build)
+npm run check
 ```
 
-### Project Scripts
+## 📄 License
 
-```bash
-npm run build          # Compile TypeScript to JavaScript
-npm run dev            # Build in watch mode
-npm run start          # Run the compiled JavaScript
-npm run test           # Run test suite
-npm run test:watch     # Run tests in watch mode
-npm run test:coverage  # Run tests with coverage report
-npm run prepublishOnly # Pre-publish build step
-```
+Apache 2.0 License - see [LICENSE](LICENSE) file for details.
 
-## Endpoints
-
-Every CubicAgent automatically exposes these endpoints:
-
-- `GET /health` - Health check endpoint returning agent status
-- `POST /call` - Main agent call endpoint implementing Cubicler contract
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes with tests: `npm test`
-4. Build the project: `npm run build`
-5. Submit a pull request
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
-### Development Workflow
+## 📞 Support
 
-```bash
-# Clone and setup
-git clone https://github.com/hainayanda/CubicAgentKit.git
-cd CubicAgentKit
-npm install
+- **Documentation**: [GitHub Wiki](https://github.com/Cubicler/CubicAgentKit/wiki)
+- **Issues**: [GitHub Issues](https://github.com/Cubicler/CubicAgentKit/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Cubicler/CubicAgentKit/discussions)
 
-# Development
-npm run dev        # Watch mode
-npm test          # Run tests
-npm run test:watch # Test watch mode
+---
 
-# Before committing
-npm run build     # Ensure build works
-npm test          # Ensure all tests pass
-```
+Built with ❤️ for the **Cubicler** ecosystem.
+
+- **MCP Protocol**: Built-in utilities for calling Cubicler's MCP endpoint
+
+## Documentation
+
+See the [API Documentation](./docs/api.md) for detailed usage information.
 
 ## License
 
-Apache-2.0 License - see [LICENSE](LICENSE) file for details.
-
-## Support
-
-- **Documentation**: This README and inline code documentation
-- **Examples**: Check the `examples/` directory for sample implementations
-- **Issues**: Report bugs and feature requests via GitHub Issues
-- **Testing**: Comprehensive test suite for reliability
+MIT

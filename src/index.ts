@@ -1,31 +1,27 @@
-// Main exports
-export { CubicAgent } from './agent/cubic-agent.js';
-export { CubicAgentExpress } from './agent/cubic-agent-express.js';
-export { BaseCubicAgent } from './agent/base-cubic-agent.js';
-export { CubiclerClient } from './agent/cubicler-client.js';
+// Core classes
+export { CubicAgent } from './core/cubic-agent.js';
+export { AxiosAgentClient } from './core/axios-agent-client.js';
+export { ExpressAgentServer } from './core/express-agent-server.js';
 
-// Type exports
-export type {
-  AgentConfig,
-  CubicAgentOptions,
-  AgentRequest,
-  AgentResponse,
-  CallHandler,
-  CallContext,
-  Message,
-  ProviderInfo,
-  ProviderSpecResponse,
-  JSONObject,
-  JSONValue,
-  FunctionCallResult
-} from './models/types.js';
+// Interfaces
+export type { AgentClient } from './interface/agent-client.js';
+export type { AgentServer, DispatchHandler, RequestHandler, CallContext } from './interface/agent-server.js';
 
-export type {
-  AgentFunctionDefinition,
-  ParameterDefinition,
-  PayloadDefinition
-} from './models/definitions.js';
+// Model types
+export type { AgentRequest } from './model/agent-request.js';
+export type { AgentResponse, RawAgentResponse } from './model/agent-response.js';
+export type { 
+  JSONValue, 
+  JSONObject, 
+  JSONArray, 
+  Message, 
+  MessageSender, 
+  AgentTool, 
+  ServerInfo, 
+  AgentInfo 
+} from './model/types.js';
+export type { MCPRequest, MCPResponse, MCPError, MCPToolCall } from './model/mcp-protocol.js';
 
-// Utility exports
-export { Logger } from './utils/logger.js';
-export { generateAgentHeader, prependAgentHeader } from './utils/agent-header.js';
+// Middleware types
+export type { RequestMiddleware } from './core/axios-agent-client.js';
+export type { ExpressMiddleware } from './core/express-agent-server.js';

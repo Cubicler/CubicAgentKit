@@ -4,33 +4,53 @@ tests/
 *.test.ts
 *.spec.ts
 
-# Development files
+# Development configuration files
 .github/
+.vscode/
 .gitignore
 .git/
 tsconfig.json
-jest.config.json
+tsup.config.ts
+vitest.config.ts
+eslint.config.js
 
-# Development dependencies
+# Development dependencies and build artifacts
 node_modules/
+coverage/
+.nyc_output/
+
+# Logs and temporary files
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
-# Coverage reports
-coverage/
-.nyc_output
+# Environment files
+.env
+.env.local
+.env.*.local
 
 # IDE and OS files
 .vscode/
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Example files (optional - you may want to keep these)
-examples/
+# Development scripts
+scripts/
+.prettierrc*
+.editorconfig
+
+# Temporary directories
+tmp/
+temp/
 
 # Keep only these files for npm:
-# - dist/
-# - README.md
-# - LICENSE
-# - package.json
+# - dist/ (compiled output)
+# - README.md (documentation)
+# - LICENSE (license file)  
+# - package.json (package manifest)
