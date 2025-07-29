@@ -1,6 +1,6 @@
 # CubicAgentKit
 
-[![npm version](https://badge.fury.io/js/cubicagentkit.svg)](https://badge.fury.io/js/cubicagentkit)
+[![npm version](https://badge.fury.io/js/@cubicler%2Fcubicagentkit.svg)](https://badge.fury.io/js/@cubicler%2Fcubicagentkit)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -20,7 +20,7 @@ A modern Node.js library for creating AI agents that integrate seamlessly with *
 ## 📦 Installation
 
 ```bash
-npm install cubicagentkit
+npm install @cubicler/cubicagentkit
 ```
 
 ## 🏃‍♂️ Quick Start
@@ -32,7 +32,7 @@ import {
   ExpressAgentServer,
   AgentRequest, 
   RawAgentResponse 
-} from 'cubicagentkit';
+} from '@cubicler/cubicagentkit';
 
 // Create client and server with built-in implementations
 const client = new AxiosAgentClient('http://localhost:1503');
@@ -204,7 +204,7 @@ await cubicAgent.start(async (request, client, context) => {
 Create custom clients and servers by implementing the interfaces:
 
 ```typescript
-import { AgentClient, AgentServer } from 'cubicagentkit';
+import { AgentClient, AgentServer } from '@cubicler/cubicagentkit';
 
 class CustomMQTTClient implements AgentClient {
   async initialize(): Promise<void> {
@@ -284,7 +284,7 @@ npm run test:ui   # Run with UI
 Use provided mocks for testing your agents:
 
 ```typescript
-import { MockAgentClient, MockAgentServer } from 'cubicagentkit/tests/mocks';
+import { MockAgentClient, MockAgentServer } from '@cubicler/cubicagentkit/tests/mocks';
 
 // Test your dispatch handler
 const mockClient = new MockAgentClient();
