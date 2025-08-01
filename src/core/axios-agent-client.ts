@@ -112,11 +112,13 @@ export class AxiosAgentClient implements AgentClient {
       // Handle MCP result - extract content from Cubicler's response format
       const result = mcpResponse.result;
       if (result && typeof result === 'object' && 'content' in result) {
-        const content = (result as any).content;
-        if (Array.isArray(content) && content.length > 0 && content[0].type === 'text') {
+        // Type the content structure properly
+        const resultWithContent = result as { content: Array<{ type: string; text: string }> };
+        const content = resultWithContent.content;
+        if (Array.isArray(content) && content.length > 0 && content[0] && content[0].type === 'text') {
           // Try to parse the text content as JSON, fallback to raw text
           try {
-            return JSON.parse(content[0].text);
+            return JSON.parse(content[0].text) as JSONValue;
           } catch {
             return content[0].text;
           }
