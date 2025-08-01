@@ -158,9 +158,9 @@ export interface JSONArray extends Array<JSONValue> {}
 - Throw errors up for connection/communication failures
 
 **Tool naming convention:**
-- Internal tools: `cubicler.available_servers`, `cubicler.fetch_server_tools`
-- MCP servers: `{server_identifier}.{function_name}`
-- REST servers: `{server_identifier}.{endpoint_name}`
+- Internal tools: `cubicler_availableServers`, `cubicler_fetchServerTools`
+- MCP servers: `{serverIdentifier}_{functionName}` (camelCase function names)
+- REST servers: `{serverIdentifier}_{endpointName}` (camelCase endpoint names)
 
 ### AgentServer Interface
 
@@ -263,9 +263,9 @@ Since users have direct access to `client.callTool()` in their dispatch handlers
 
 ```typescript
 // In your dispatch handler
-const servers = await client.callTool('cubicler.available_servers', {});
-const tools = await client.callTool('cubicler.fetch_server_tools', { serverIdentifier: 'weather_service' });
-const result = await client.callTool('weather_service.get_current_weather', { city: 'Paris' });
+const servers = await client.callTool('cubicler_availableServers', {});
+const tools = await client.callTool('cubicler_fetchServerTools', { serverIdentifier: 'weatherService' });
+const result = await client.callTool('weatherService_getCurrentWeather', { city: 'Paris' });
 ```
 
 ### Middleware Support
@@ -306,7 +306,7 @@ try {
     
     // Call Cubicler tools if needed
     if (lastMessage.content?.includes('weather')) {
-      const weatherData = await client.callTool('weather_service.get_current_weather', {
+      const weatherData = await client.callTool('weatherService_getCurrentWeather', {
         city: 'Paris',
         country: 'France'
       });
@@ -424,7 +424,7 @@ try {
 ```json
 {
   "name": "cubicagentkit",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Node.js library for creating AI agents that integrate with Cubicler",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

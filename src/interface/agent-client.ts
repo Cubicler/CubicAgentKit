@@ -14,7 +14,7 @@ export interface AgentClient {
 
   /**
    * Execute a tool call through Cubicler's MCP endpoint
-   * @param toolName - The name of the tool to call (e.g., 'weather_service.get_current_weather')
+   * @param toolName - The name of the tool to call (e.g., 'weatherService_getCurrentWeather')
    * @param parameters - The parameters to pass to the tool
    * @returns The result from the tool execution
    * @throws Error if the tool call fails or communication fails

@@ -58,7 +58,7 @@ export class AxiosAgentClient implements AgentClient {
         capabilities: {},
         clientInfo: {
           name: 'CubicAgentKit',
-          version: '2.0.0'
+          version: '2.1.0'
         }
       },
       id: this.requestId++,

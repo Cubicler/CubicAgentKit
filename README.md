@@ -46,7 +46,7 @@ try {
     
     // Call Cubicler tools if needed
     if (lastMessage.content?.includes('weather')) {
-      const weatherData = await client.callTool('weather_service.get_current_weather', {
+      const weatherData = await client.callTool('weatherService_getCurrentWeather', {
         city: 'Paris'
       });
       
@@ -175,15 +175,15 @@ Access Cubicler's internal tools and MCP servers:
 ```typescript
 await cubicAgent.start(async (request, client, context) => {
   // Get available servers
-  const servers = await client.callTool('cubicler.available_servers', {});
+  const servers = await client.callTool('cubicler_availableServers', {});
   
   // Fetch tools from a specific server
-  const tools = await client.callTool('cubicler.fetch_server_tools', { 
-    serverIdentifier: 'weather_service' 
+  const tools = await client.callTool('cubicler_fetchServerTools', { 
+    serverIdentifier: 'weatherService' 
   });
   
   // Call tools from MCP servers
-  const weather = await client.callTool('weather_service.get_current_weather', {
+  const weather = await client.callTool('weatherService_getCurrentWeather', {
     city: 'Paris',
     country: 'France'
   });
@@ -291,7 +291,7 @@ const mockClient = new MockAgentClient();
 const mockServer = new MockAgentServer();
 const testAgent = new CubicAgent(mockClient, mockServer);
 
-mockClient.mockToolCall('weather_service.get_weather', { temperature: '22°C' });
+mockClient.mockToolCall('weatherService_getWeather', { temperature: '22°C' });
 
 // Test your handler logic
 ```
