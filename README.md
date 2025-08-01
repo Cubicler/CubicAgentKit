@@ -174,11 +174,12 @@ Access Cubicler's internal tools and MCP servers:
 
 ```typescript
 await cubicAgent.start(async (request, client, context) => {
-  // Get available servers
-  const servers = await client.callTool('cubicler_availableServers', {});
+  // Get available servers (new structured format in Cubicler 2.3.0)
+  const serverList = await client.callTool('cubicler_available_servers', {});
+  // Returns: { "total": 1, "servers": [{"identifier": "...", "name": "...", ...}] }
   
-  // Fetch tools from a specific server
-  const tools = await client.callTool('cubicler_fetchServerTools', { 
+  // Fetch tools from a specific server (now working in Cubicler 2.3.0!)
+  const tools = await client.callTool('cubicler_fetch_server_tools', { 
     serverIdentifier: 'weatherService' 
   });
   

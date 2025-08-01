@@ -1,0 +1,40 @@
+services:
+  cubicler:
+    # Using Cubicler 2.3.0 Docker image
+    image: cubicler/cubicler:2.3.0
+    volumes:
+      - ./config:/app/config
+    ports:
+      - "1504:1503"  # Use different external port for testing
+    environment:
+      - NODE_ENV=test
+      - PORT=1503
+      - CUBICLER_AGENTS_LIST=./config/test-agents.json
+      - CUBICLER_PROVIDERS_LIST=./config/test-providers.json
+      - CUBICLER_PORT=1503
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1503/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cubicagentkit-test
+
+  # Optional: Add a test MCP server for more comprehensive testing
+  test-mcp-server:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./fixtures/test-mcp-server:/app
+    command: ["sh", "-c", "npm install && npm start"]
+    ports:
+      - "3020:3001"  # Use port 3020 externally
+    networks:
+      - cubicagentkit-test
+    depends_on:
+      - cubicler
+
+networks:
+  cubicagentkit-test:
+    driver: bridge

@@ -1,6 +1,6 @@
 {
   "name": "@cubicler/cubicagentkit",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "Node.js library for creating AI agents that integrate with Cubicler",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,9 +18,12 @@
     "test": "vitest",
     "test:run": "vitest --run",
     "test:ui": "vitest --ui",
+    "test:integration": "vitest --config tests/integration/vitest.integration.config.ts",
+    "test:integration:run": "vitest --run --config tests/integration/vitest.integration.config.ts",
+    "test:all": "npm run test:run && npm run test:integration:run",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
-    "check": "npm run lint && npm run test:run && npm run build",
+    "check": "npm run lint && npm run test:all && npm run build",
     "prepublishOnly": "npm run check",
     "publish:dry": "npm publish --dry-run"
   },

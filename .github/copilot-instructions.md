@@ -158,7 +158,7 @@ export interface JSONArray extends Array<JSONValue> {}
 - Throw errors up for connection/communication failures
 
 **Tool naming convention:**
-- Internal tools: `cubicler_availableServers`, `cubicler_fetchServerTools`
+- Internal tools: `cubicler_available_servers`, `cubicler_fetch_server_tools`
 - MCP servers: `{serverIdentifier}_{functionName}` (camelCase function names)
 - REST servers: `{serverIdentifier}_{endpointName}` (camelCase endpoint names)
 
@@ -263,8 +263,8 @@ Since users have direct access to `client.callTool()` in their dispatch handlers
 
 ```typescript
 // In your dispatch handler
-const servers = await client.callTool('cubicler_availableServers', {});
-const tools = await client.callTool('cubicler_fetchServerTools', { serverIdentifier: 'weatherService' });
+const servers = await client.callTool('cubicler_available_servers', {});
+const tools = await client.callTool('cubicler_fetch_server_tools', { serverIdentifier: 'weatherService' });
 const result = await client.callTool('weatherService_getCurrentWeather', { city: 'Paris' });
 ```
 

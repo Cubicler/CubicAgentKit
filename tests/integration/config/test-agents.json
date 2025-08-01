@@ -1,0 +1,14 @@
+{
+  "basePrompt": "You are a test AI assistant for integration testing.",
+  "defaultPrompt": "You have access to various tools and services for testing purposes.",
+  "agents": [
+    {
+      "identifier": "test_agent",
+      "name": "Test Agent",
+      "transport": "http",
+      "url": "http://test-agent:3000/agent",
+      "description": "A test agent for integration testing",
+      "prompt": "You are a test agent. When asked about weather, use available tools to get information."
+    }
+  ]
+}

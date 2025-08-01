@@ -51,8 +51,26 @@ export class ExpressAgentServer implements AgentServer {
     this.app.post(this.endpoint, (req: Request, res: Response) => {
       void (async () => {
         try {
+          // Basic validation of request structure
+          if (!req.body || typeof req.body !== 'object') {
+            res.status(400).json({
+              error: 'Bad Request',
+              message: 'Request body must be a valid JSON object'
+            });
+            return;
+          }
+
           const agentRequest = req.body as AgentRequest;
           
+          // Validate required AgentRequest structure
+          if (!agentRequest.agent || !agentRequest.tools || !agentRequest.servers || !agentRequest.messages) {
+            res.status(400).json({
+              error: 'Bad Request',
+              message: 'Request must include agent, tools, servers, and messages properties'
+            });
+            return;
+          }
+
           // Call the handler with the parsed request
           const agentResponse = await handler(agentRequest);
           

@@ -1,0 +1,12 @@
+{
+  "mcpServers": [
+    {
+      "identifier": "test_mcp_server",
+      "name": "Test MCP Server",
+      "description": "A test MCP server for integration testing",
+      "transport": "http",
+      "url": "http://test-mcp-server:3001/mcp"
+    }
+  ],
+  "restServers": []
+}
