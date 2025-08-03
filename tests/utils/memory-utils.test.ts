@@ -7,7 +7,7 @@ import {
   validateMemoryInput,
   createDefaultMemoryConfig
 } from '../../src/utils/memory-utils.js';
-import { AgentMemory, MemorySearchOptions } from '../../src/interface/memory-repository.js';
+import { AgentMemory } from '../../src/interface/memory-repository.js';
 
 describe('Memory Utils', () => {
   describe('countWords', () => {

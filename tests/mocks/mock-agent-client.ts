@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import { AgentClient } from '../../src/interface/agent-client.js';
 import { JSONValue, JSONObject } from '../../src/model/types.js';
 

@@ -54,6 +54,7 @@ docker-compose -f docker-compose.test.yml down -v
 ## 🧪 What's Being Tested
 
 ### AxiosAgentClient Integration
+
 - ✅ Connection to real Cubicler instance
 - ✅ MCP protocol communication  
 - ✅ Tool calling with response parsing
@@ -61,12 +62,14 @@ docker-compose -f docker-compose.test.yml down -v
 - ✅ Middleware functionality
 
 ### CubicAgent Integration  
+
 - ✅ Full agent lifecycle (start/stop)
 - ✅ HTTP request handling
 - ✅ Tool call tracking
 - ✅ Response formatting
 
 ### Real-World Scenarios
+
 - ✅ Docker Compose environment
 - ✅ Cubicler 2.2.0 compatibility
 - ✅ MCP server integration
@@ -75,10 +78,12 @@ docker-compose -f docker-compose.test.yml down -v
 ## ⚙️ Configuration
 
 ### Environment Variables
-- `CUBICLER_URL`: Cubicler instance URL (default: http://localhost:1504)
+
+- `CUBICLER_URL`: Cubicler instance URL (default: <http://localhost:1504>)
 - `TEST_TIMEOUT`: Test timeout in milliseconds (default: 30000)
 
 ### Docker Services
+
 - **cubicler**: Main Cubicler instance (port 1504)
 - **test-mcp-server**: Mock MCP server (port 3020)
 
@@ -87,6 +92,7 @@ docker-compose -f docker-compose.test.yml down -v
 ### Common Issues
 
 **Services not starting:**
+
 ```bash
 # Check Docker logs
 docker-compose -f docker-compose.test.yml logs
@@ -97,6 +103,7 @@ lsof -i :3020
 ```
 
 **Tests timing out:**
+
 ```bash
 # Increase timeout
 export TEST_TIMEOUT=60000
@@ -104,12 +111,14 @@ npm run test:integration:run
 ```
 
 **Cubicler connection issues:**
+
 ```bash
 # Verify Cubicler is responding
 curl http://localhost:1504/health
 ```
 
 ### Known Issues in Cubicler 2.2.0
+
 - ❌ `cubicler_available_servers` returns empty despite loaded servers
 - ❌ `cubicler_fetch_server_tools` reports "Server not found" for loaded servers  
 - ✅ Direct MCP server tool calls work perfectly (e.g., `szwi9l5_get_time`)
@@ -117,16 +126,19 @@ curl http://localhost:1504/health
 ## 🔧 Maintenance
 
 ### Updating Cubicler Version
+
 1. Update `../../Cubicler` directory to desired version
 2. Test integration compatibility
 3. Update any configuration changes in `config/`
 
 ### Adding New Tests
+
 1. Create new `*.integration.test.ts` files in this directory
 2. Follow existing patterns for setup/teardown
 3. Use real network calls and Docker services
 
 ### Modifying Test Environment
+
 1. Update `docker-compose.test.yml` for service changes
 2. Modify `config/` files for Cubicler configuration
 3. Update `fixtures/` for test data changes

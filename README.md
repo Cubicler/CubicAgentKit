@@ -564,7 +564,3 @@ Built with ❤️ for the **Cubicler** ecosystem.
 ## Documentation
 
 See the [API Documentation](./docs/api.md) for detailed usage information.
-
-## License
-
-MIT

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAgentClient } from '../mocks/mock-agent-client.js';
 import { JSONValue, JSONObject } from '../../src/model/types.js';
 import { AgentClient } from '../../src/interface/agent-client.js';

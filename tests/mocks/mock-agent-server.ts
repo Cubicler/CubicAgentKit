@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import { AgentServer, RequestHandler } from '../../src/interface/agent-server.js';
 import { AgentRequest } from '../../src/model/agent-request.js';
 import { AgentResponse } from '../../src/model/agent-response.js';

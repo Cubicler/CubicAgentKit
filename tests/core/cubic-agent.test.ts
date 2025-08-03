@@ -162,12 +162,12 @@ describe('CubicAgent', () => {
       let capturedClient1: any;
       let capturedClient2: any;
 
-      const handler1 = vi.fn().mockImplementation(async (request, client, context) => {
+      const handler1 = vi.fn().mockImplementation(async (_request, client, _context) => {
         capturedClient1 = client;
         return createMockRawAgentResponse();
       });
 
-      const handler2 = vi.fn().mockImplementation(async (request, client, context) => {
+      const handler2 = vi.fn().mockImplementation(async (_request, client, _context) => {
         capturedClient2 = client;
         return createMockRawAgentResponse();
       });
@@ -190,7 +190,7 @@ describe('CubicAgent', () => {
       const mockRequest = createMockAgentRequest();
       let capturedContext: any;
 
-      const toolCallingHandler = vi.fn().mockImplementation(async (request, client, context) => {
+      const toolCallingHandler = vi.fn().mockImplementation(async (_request, client, context) => {
         capturedContext = context;
         
         // Make some tool calls
@@ -211,7 +211,7 @@ describe('CubicAgent', () => {
       const mockRequest = createMockAgentRequest();
       const toolCounts: number[] = [];
 
-      const handler = vi.fn().mockImplementation(async (request, client, context) => {
+      const handler = vi.fn().mockImplementation(async (_request, client, context) => {
         toolCounts.push(context.toolCallCount); // Should be 0 initially
         
         await client.callTool('tool1', {});
