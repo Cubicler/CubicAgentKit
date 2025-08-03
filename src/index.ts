@@ -2,6 +2,8 @@
 export { CubicAgent } from './core/cubic-agent.js';
 export { AxiosAgentClient } from './core/axios-agent-client.js';
 export { ExpressAgentServer } from './core/express-agent-server.js';
+export { StdioAgentClient } from './core/stdio-agent-client.js';
+export { StdioAgentServer } from './core/stdio-agent-server.js';
 
 // Interfaces
 export type { AgentClient } from './interface/agent-client.js';

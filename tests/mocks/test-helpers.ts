@@ -1,5 +1,5 @@
 import { AgentRequest } from '../../src/model/agent-request.js';
-import { RawAgentResponse } from '../../src/model/agent-response.js';
+import { RawAgentResponse, AgentResponse } from '../../src/model/agent-response.js';
 
 /**
  * Helper to create mock AgentRequest for testing
@@ -52,6 +52,22 @@ export function createMockRawAgentResponse(overrides: Partial<RawAgentResponse> 
     type: 'text',
     content: 'Mock response',
     usedToken: 10,
+    ...overrides
+  };
+}
+
+/**
+ * Helper to create mock AgentResponse for testing
+ */
+export function createMockAgentResponse(overrides: Partial<AgentResponse> = {}): AgentResponse {
+  return {
+    timestamp: '2025-01-01T00:00:00.000Z',
+    type: 'text',
+    content: 'Mock response',
+    metadata: {
+      usedToken: 10,
+      usedTools: 0
+    },
     ...overrides
   };
 }
