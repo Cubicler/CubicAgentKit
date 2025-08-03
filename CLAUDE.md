@@ -12,42 +12,25 @@ CubicAgentKit is an **npm library** that helps developers create AI agents for C
 ## 🏗️ Architecture Philosophy
 
 - **Composition over inheritance** - No abstract classes, use dependency injection
+- **Interface-based design** - `PersistentMemory`, `ShortTermMemory`, `AgentClient`, `AgentServer` interfaces
 - **Simple and complete** - CubicAgent class handles all Cubicler integration
 - **Error transparency** - All errors thrown up to implementers
 - **Type safety** - Full TypeScript support with strict typing
 - **Developer experience** - Built-in implementations with middleware support
+- **Memory system** - Sentence-based memory with SQLite persistence and LRU caching
 
 ## 📦 Core Package Structure
 
-```
+```typescript
 src/
-  core/
-    cubic-agent.ts               # Main CubicAgent orchestrator class
-    axios-agent-client.ts        # HTTP client for Cubicler MCP communication
-    express-agent-server.ts      # Express HTTP server for agent endpoints
-    stdio-agent-client.ts        # Stdio client for Cubicler MCP communication
-    stdio-agent-server.ts        # Stdio server for handling cubicler requests
-    tracking-agent-client.ts     # Tool call tracking wrapper
-  interface/
-    agent-client.ts              # AgentClient interface
-    agent-server.ts              # AgentServer interface and handler types
-  memory/
-    agent-memory-manager.ts      # Main memory orchestrator with two-tier system
-    lru-short-term-memory.ts     # LRU-based short-term memory (in-memory)
-    sqlite-memory-store.ts       # SQLite-based long-term memory storage
-    memory-mcp-tools.ts          # MCP tools for memory operations
-    memory-types.ts              # Memory interfaces and types
-    memory-utils.ts              # Utility functions for memory operations
-  model/
-    agent-request.ts             # AgentRequest type (from Cubicler)
-    agent-response.ts            # AgentResponse & RawAgentResponse types
-    mcp-protocol.ts              # MCP JSON-RPC 2.0 protocol types
-    types.ts                     # Common JSON and Cubicler types
-tests/
-  core/                          # Unit tests mirroring src/core structure
-  memory/                        # Memory system unit tests
-  mocks/                         # Mock implementations and test helpers
-  integration/                   # Integration tests (excluded from CI)
+  core/cubic-agent.ts                      # Main CubicAgent orchestrator with memory
+  client/{axios,stdio,tracking}-agent-client.ts  # HTTP/Stdio clients + tracking
+  server/{express,stdio}-agent-server.ts   # HTTP/Stdio servers
+  interface/                               # All interface definitions
+  memory/                                  # Memory system (SQLite + LRU)
+  model/                                   # Types (AgentRequest, AgentResponse, MCP, etc.)
+  utils/memory-utils.ts                    # Memory utilities
+tests/                                     # Unit tests mirroring src structure
 ```
 
 ## 🎯 Core Classes & Interfaces
@@ -56,19 +39,28 @@ tests/
 
 ```typescript
 export class CubicAgent {
-  constructor(private agentClient: AgentClient, private server: AgentServer) {}
+  constructor(
+    private agentClient: AgentClient, 
+    private server: AgentServer,
+    private memory?: MemoryRepository
+  ) {}
   async start(handler: DispatchHandler): Promise<void>;
   async stop(): Promise<void>;
 }
+
+type DispatchHandler = (
+  request: AgentRequest, 
+  client: AgentClient, 
+  context: CallContext
+) => Promise<RawAgentResponse>;
+
+interface CallContext {
+  readonly toolCallCount: number;
+  memory?: MemoryRepository;
+}
 ```
 
-**Key responsibilities:**
-
-- HTTP/Stdio server management
-- Request validation and routing
-- Initialize AgentClient via `client.initialize()`
-- Provide fresh `TrackingAgentClient` per request for tool call counting
-- Transform `RawAgentResponse` to complete `AgentResponse` with metadata
+**Responsibilities:** Server management, request routing, client initialization, tool tracking, memory injection, response transformation.
 
 ### AgentClient Interface
 
@@ -98,6 +90,45 @@ export interface AgentServer {
 - `ExpressAgentServer` - HTTP server using Express.js
 - `StdioAgentServer` - Stdio server using stdin/stdout
 
+## 🧠 Memory System Architecture
+
+### Memory Factory Functions
+
+```typescript
+// For development with in-memory SQLite
+async function createDefaultMemoryRepository(
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
+// For production with file-based SQLite
+async function createSQLiteMemoryRepository(
+  dbPath: string,
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
+// Generic factory with custom SQLite instance
+async function createMemoryRepository(
+  longTerm: SQLiteMemory,
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
+// Core memory operations
+interface MemoryRepository {
+  remember(sentence: string, importance?: number, tags: string[]): Promise<string>
+  recall(id: string): Promise<AgentMemory | null>
+  search(options: MemorySearchOptions): Promise<AgentMemory[]>
+  editImportance(id: string, importance: number): Promise<boolean>
+  editContent(id: string, sentence: string): Promise<boolean>
+  addTag(id: string, tag: string): Promise<boolean>
+  removeTag(id: string, tag: string): Promise<boolean>
+  forget(id: string): Promise<boolean>
+  getStats(): Promise<MemoryStats>
+}
+```
+
 ## 🔧 Communication Protocols
 
 ### HTTP Mode (Traditional)
@@ -113,34 +144,6 @@ export interface AgentServer {
 - **Use case**: CLI tools, local development, process-based integrations
 
 Both modes use **MCP JSON-RPC 2.0** protocol for tool communication.
-
-## 📋 Type Architecture & Patterns
-
-### Clean Domain Models
-
-All domain types (`AgentRequest`, `AgentResponse`, `AgentInfo`, etc.) are pure TypeScript interfaces without JSON protocol coupling.
-
-### Type Safety at Boundaries
-
-Type assertions only at protocol boundaries:
-
-```typescript
-// ✅ Good - explicit boundary assertion with comment
-const agentRequest = request.params as unknown as AgentRequest; // Safe: validated below
-const result = agentResponse as unknown as JSONValue; // Safe: JSON-serializable
-
-// ❌ Bad - using any
-const result = agentResponse as any;
-```
-
-### JSON Compatibility
-
-```typescript
-// JSON base types
-export type JSONValue = string | number | boolean | null | JSONObject | JSONArray;
-export interface JSONObject { [key: string]: JSONValue; }
-export type JSONArray = JSONValue[];
-```
 
 ## 🧪 Testing Patterns
 
@@ -161,13 +164,6 @@ const mockClient = new MockAgentClient();
 const cubicAgent = new CubicAgent(mockClient, mockServer);
 ```
 
-### Async Test Handling
-
-```typescript
-// Wait for async operations in tests
-await new Promise(resolve => setTimeout(resolve, 0));
-```
-
 ## 🚀 Build & Development
 
 ### Scripts
@@ -186,66 +182,125 @@ npm run lint      # Run linter (if available)
 - **Strict**: Enabled
 - **Output**: ES modules with `.js` extensions in imports
 
-## 🔧 Development Standards
-
-### Code Quality Rules
-
-- **No `any` types** - Use proper TypeScript typing or `unknown` intermediate casts
-- **Error handling** - Throw errors up to implementers, don't catch and ignore
-- **SOLID principles** - Single responsibility, dependency injection, interface segregation
-- **Composition over inheritance** - No abstract classes
-
-### Linting & Type Issues
-
-- **If linter is wrong** - Disable with explanatory comments
-- **Unused imports** - Remove rather than disable warning
-- **Constructor parameters** - Use `// eslint-disable-next-line no-unused-vars` for DI
-- **Non-null assertions** - Use `// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Safe: reason`
-
-### File Naming & Structure
-
-- **Core classes**: `kebab-case.ts` (e.g., `stdio-agent-client.ts`)
-- **Interfaces**: `kebab-case.ts` (e.g., `agent-client.ts`)  
-- **Tests**: Mirror src structure with `.test.ts` suffix
-- **Exports**: ES modules with `.js` extensions
-
 ## 📚 Usage Examples
 
 ### Basic HTTP Usage
 
 ```typescript
-import { CubicAgent, AxiosAgentClient, ExpressAgentServer } from 'cubicagentkit';
+import { 
+  CubicAgent, 
+  AxiosAgentClient, 
+  ExpressAgentServer,
+  createDefaultMemoryRepository
+} from 'cubicagentkit';
 
 const client = new AxiosAgentClient('http://localhost:1503');
 const server = new ExpressAgentServer(3000, '/agent');
-const agent = new CubicAgent(client, server);
+const memory = await createDefaultMemoryRepository(); // In-memory SQLite
+const agent = new CubicAgent(client, server, memory);
 
 await agent.start(async (request, client, context) => {
+  const lastMessage = request.messages[request.messages.length - 1];
+  
+  // Store user preferences in memory
+  if (lastMessage.content?.includes('I prefer')) {
+    const memoryId = await context.memory?.remember(
+      lastMessage.content,
+      0.8,
+      ['user_preference', 'communication']
+    );
+  }
+  
+  // Search relevant memories for context
+  const relevantMemories = await context.memory?.search({
+    tags: ['user_preference'],
+    limit: 3,
+    sortBy: 'importance'
+  });
+  
   const result = await client.callTool('weatherService_getCurrentWeather', { city: 'Paris' });
-  return { type: 'text', content: `Weather: ${result}`, usedToken: 25 };
+  return { 
+    type: 'text', 
+    content: `Weather: ${result} (${context.toolCallCount} tools used)`, 
+    usedToken: 25 
+  };
 });
 ```
 
 ### Basic Stdio Usage  
 
 ```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer } from 'cubicagentkit';
+import { 
+  CubicAgent, 
+  StdioAgentClient, 
+  StdioAgentServer,
+  createSQLiteMemoryRepository
+} from 'cubicagentkit';
 
 const client = new StdioAgentClient('npx', ['cubicler', '--server']);
 const server = new StdioAgentServer();
-const agent = new CubicAgent(client, server);
+const memory = await createSQLiteMemoryRepository('./agent-memories.db');
+const agent = new CubicAgent(client, server, memory);
 
 await agent.start(async (request, client, context) => {
+  // Memory operations available in context
+  const stats = await context.memory?.getStats();
+  console.log(`Memory usage: ${stats?.shortTermCount} memories in cache`);
+  
   const result = await client.callTool('weatherService_getCurrentWeather', { city: 'Paris' });
-  return { type: 'text', content: `Weather: ${result}`, usedToken: 25 };
+  return { 
+    type: 'text', 
+    content: `Weather: ${result}`, 
+    usedToken: 25 
+  };
+});
+```
+
+### Custom Memory Setup
+
+```typescript
+import { 
+  CubicAgent, 
+  AxiosAgentClient, 
+  ExpressAgentServer,
+  createMemoryRepository,
+  SQLiteMemory
+} from 'cubicagentkit';
+
+// Create custom SQLite instance
+const longTerm = new SQLiteMemory('./custom-path.db');
+
+// Use generic factory with LRU short-term memory as default
+const memory = await createMemoryRepository(longTerm, 3000, 0.8);
+
+const client = new AxiosAgentClient('http://localhost:1503');
+const server = new ExpressAgentServer(3000, '/agent');
+const agent = new CubicAgent(client, server, memory);
+
+await agent.start(async (request, client, context) => {
+  // Memory system automatically uses LRUShortTermMemory for caching
+  const memoryId = await context.memory?.remember(
+    'Custom memory setup example',
+    0.7,
+    ['example', 'custom']
+  );
+  
+  return {
+    type: 'text',
+    content: 'Processing with custom memory setup...',
+    usedToken: 10
+  };
 });
 ```
 
 ### Test Coverage
 
-- **StdioAgentClient**: 18 tests (initialization, tool calls, error handling, lifecycle)
-- **StdioAgentServer**: 22 tests (MCP protocol, validation, async handling, buffering)
-- **All tests passing** as of latest implementation
+- **Core**: CubicAgent with memory integration tests
+- **Client**: AxiosAgentClient, StdioAgentClient (18 tests), TrackingAgentClient
+- **Server**: ExpressAgentServer, StdioAgentServer (22 tests)
+- **Memory**: AgentMemoryRepository, SQLiteMemory, LRUShortTermMemory
+- **Utils**: Memory utilities and validation functions
+- **All tests passing** with comprehensive coverage
 
 ## 📝 Development Notes
 
@@ -255,7 +310,8 @@ await agent.start(async (request, client, context) => {
 2. **Add comprehensive tests** - Unit tests with mocks, integration tests if needed  
 3. **Maintain type safety** - No `any`, proper boundary assertions only
 4. **Update exports** - Add to `src/index.ts` for public API
-5. **Document in CLAUDE.md** - Update this file for future context
+5. **Update memory system** - Consider memory integration for stateful features
+6. **Document in CLAUDE.md** - Update this file for future context
 
 ### When Fixing Issues
 
@@ -263,6 +319,7 @@ await agent.start(async (request, client, context) => {
 2. **Write tests first** - Reproduce issue, then fix
 3. **Maintain backward compatibility** - Don't break existing API
 4. **Follow error handling** - Throw up to implementers
+5. **Consider memory implications** - How does the fix affect memory operations
 
 ### Tool Commands for Common Tasks
 
@@ -270,6 +327,7 @@ await agent.start(async (request, client, context) => {
 # Run specific test files
 npm test -- stdio
 npm test -- cubic-agent
+npm test -- memory
 
 # Build and check types
 npm run build
@@ -279,6 +337,10 @@ npm run lint
 
 # Check integration tests (excluded from CI)
 cd tests/integration && npm test
+
+# Memory-specific tests
+npm test -- lru-short-term-memory
+npm test -- memory-utils
 ```
 
 This document serves as the primary context for future AI development sessions with CubicAgentKit. Always refer to this when working on the project to maintain consistency with established patterns and architecture.
