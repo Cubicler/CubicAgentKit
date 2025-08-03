@@ -13,8 +13,7 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'tests/mocks/',
-        'tests/integration/',
-        'tests/fixtures/'
+        'tests/integration/'
       ]
     }
   }

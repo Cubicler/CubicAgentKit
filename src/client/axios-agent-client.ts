@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
-import { MCPRequest, MCPResponse } from '../model/mcp-protocol.js';
+import { MCPRequest, MCPResponse } from '../model/mcp.js';
 
 /**
  * Middleware function type for request modification

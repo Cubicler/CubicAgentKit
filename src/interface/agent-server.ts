@@ -1,12 +1,14 @@
 import { AgentRequest } from '../model/agent-request.js';
 import { AgentResponse, RawAgentResponse } from '../model/agent-response.js';
 import { AgentClient } from './agent-client.js';
+import { MemoryRepository } from './memory-repository.js';
 
 /**
- * Tracking context that provides call statistics
+ * Tracking context that provides call statistics and optional memory access
  */
 export interface CallContext {
   readonly toolCallCount: number;
+  readonly memory?: MemoryRepository;
 }
 
 /**

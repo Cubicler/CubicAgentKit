@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { CubicAgent } from '../../src/core/cubic-agent.js';
-import { AxiosAgentClient } from '../../src/core/axios-agent-client.js';
-import { ExpressAgentServer } from '../../src/core/express-agent-server.js';
+import { AxiosAgentClient } from '../../src/client/axios-agent-client.js';
+import { ExpressAgentServer } from '../../src/server/express-agent-server.js';
 import { AgentRequest } from '../../src/model/agent-request.js';
 import { RawAgentResponse } from '../../src/model/agent-response.js';
 import { AgentClient } from '../../src/interface/agent-client.js';

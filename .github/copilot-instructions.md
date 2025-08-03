@@ -1,6 +1,26 @@
-# CubicAgentKit AI Development Instructions
+# CubicAgentKit AI Development Instruction**Service-Oriented Architecture**
+Following Cubicler's patterns with focused interfaces:
 
-CubicAgentKit is an **npm library** that helps developers create AI agents for Cubicler 2.0 based on Node.js. It provides a simple, complete class-based approach using composition architecture with dependency injection for easy testing and flexibility.
+- **`AgentClient`** - Interface for Cubicler MCP communication
+- **`AxiosAgentClient`** - Built-in HTTP client with middleware support
+- **`AgentServer`** - Interface for HTTP server management
+- **`ExpressAgentServer`** - Built-in Express server with middleware support
+- **`TrackingAgentClient`** - Wrapper that automatically tracks tool calls per request
+- **`MemoryRepository`** - Interface for agent memory systems
+- **`PersistentMemory`** - Interface for long-term storage (SQLite, Redis, etc.)
+- **`ShortTermMemory`** - Interface for LRU caching systems
+- **`AgentMemoryRepository`** - Complete two-tier memory implementation
+- **`SQLiteMemory`** - Production-ready persistent storage with search capabilities
+- **`LRUShortTermMemory`** - Token-based LRU cache for frequently accessed memories
+
+Key services instantiated with dependency injection:
+```typescript
+// Built-in implementations for immediate use
+const client = new AxiosAgentClient('http://localhost:1503');
+const server = new ExpressAgentServer(3000, '/agent');
+const memory = await createSQLiteMemoryRepository('./memories.db');
+const agent = new CubicAgent(client, server, memory);
+``` is an **npm library** that helps developers create AI agents for Cubicler 2.0 based on Node.js. It provides a simple, complete class-based approach using composition architecture with dependency injection for easy testing and flexibility.
 
 ## 🧱 System Overview
 
@@ -8,6 +28,7 @@ CubicAgentKit simplifies the creation of **CubicAgents** that integrate with Cub
 - A complete `CubicAgent` class that handles HTTP server setup and Cubicler communication
 - Built-in `AxiosAgentClient` for Cubicler MCP communication with middleware support
 - Built-in `ExpressAgentServer` for HTTP server management with middleware support
+- Production-ready memory system with `SQLiteMemory` persistent storage and `LRUShortTermMemory` caching
 - Automatic tool call tracking with `TrackingAgentClient` wrapper
 - Type-safe request/response handling matching Cubicler's API contract
 - Simplified developer interface with `RawAgentResponse` (kit adds timestamp and tool count)
@@ -15,6 +36,7 @@ CubicAgentKit simplifies the creation of **CubicAgents** that integrate with Cub
 
 **Architecture Philosophy:**
 - **Composition over inheritance** - No abstract classes, use dependency injection
+- **Interface-based design** - `PersistentMemory`, `ShortTermMemory`, `AgentClient`, `AgentServer` interfaces
 - **Simple and complete** - CubicAgent class handles all Cubicler integration
 - **Error transparency** - All errors thrown up to implementers
 - **Type safety** - Full TypeScript support with strict typing
@@ -72,13 +94,25 @@ try {
 ```
 src/
   core/
-    cubic-agent.ts               # Main CubicAgent class with tool tracking
+    cubic-agent.ts               # Main CubicAgent class with memory integration
+  client/
     axios-agent-client.ts        # Axios-based Cubicler client with middleware
-    express-agent-server.ts      # Express-based HTTP server with middleware
     tracking-agent-client.ts     # Tool call tracking wrapper
+  server/
+    express-agent-server.ts      # Express-based HTTP server with middleware
   interface/
     agent-client.ts              # AgentClient interface
     agent-server.ts              # AgentServer interface and handler types
+    memory-repository.ts         # MemoryRepository interface
+    persistent-memory.ts         # PersistentMemory interface
+    short-term-memory.ts         # ShortTermMemory interface
+  memory/
+    agent-memory-repository.ts   # Main memory orchestrator
+    sqlite-memory.ts             # SQLite-based persistent storage
+    lru-short-term-memory.ts     # LRU-based short-term cache
+    memory-types.ts              # Memory-related type definitions
+    memory-utils.ts              # Memory utilities and validators
+    memory-index.ts              # Memory system exports and factories
   model/
     agent-request.ts             # AgentRequest type (from Cubicler)
     agent-response.ts            # AgentResponse & RawAgentResponse types
@@ -88,6 +122,9 @@ tests/
   core/
     cubic-agent.test.ts          # CubicAgent unit tests
     tracking-agent-client.test.ts # Tool tracking tests
+  memory/
+    lru-short-term-memory.test.ts # LRU cache tests
+    memory-utils.test.ts         # Memory utilities tests
   mocks/
     mock-agent-client.ts         # Mock implementations for testing
     mock-agent-server.ts         # Mock server for testing
@@ -98,27 +135,32 @@ tests/
 
 ### CubicAgent Class
 
-The main orchestrator class that handles HTTP server and dispatch routing:
+The main orchestrator class that handles HTTP server, dispatch routing, and memory integration:
 
 ```typescript
 export class CubicAgent {
-  constructor(private agentClient: AgentClient, private server: AgentServer) {}
+  constructor(
+    private agentClient: AgentClient, 
+    private server: AgentServer,
+    private memory?: MemoryRepository
+  ) {}
   
   // Start server and register dispatch handler in one call
   async start(handler: DispatchHandler): Promise<void>;
   async stop(): Promise<void>;  // Stop HTTP server
 }
 
-// Callback signature for dispatch handling with tool tracking
+// Callback signature for dispatch handling with tool tracking and memory access
 type DispatchHandler = (
   request: AgentRequest, 
   client: AgentClient, 
   context: CallContext
 ) => Promise<RawAgentResponse>;
 
-// Context provides access to tool call count
+// Context provides access to tool call count and optional memory
 interface CallContext {
   readonly toolCallCount: number;
+  memory?: MemoryRepository;
 }
 ```
 
@@ -127,11 +169,12 @@ interface CallContext {
 - Request validation and routing
 - Initialize AgentClient via `client.initialize()`
 - Provide fresh `TrackingAgentClient` per request for tool call counting
+- Inject memory repository into context for agent handlers
 - Transform `RawAgentResponse` to complete `AgentResponse` with metadata
 - All errors thrown up to implementers
 
 **Usage pattern:**
-1. Create CubicAgent with AgentClient and AgentServer
+1. Create CubicAgent with AgentClient, AgentServer, and optional MemoryRepository
 2. Call `start(handler)` - CubicAgent provides tracking client and context to handler
 3. Handler returns `RawAgentResponse`, CubicAgent adds timestamp and tool count
 
@@ -162,32 +205,54 @@ export interface JSONArray extends Array<JSONValue> {}
 - MCP servers: `{serverIdentifier}_{functionName}` (camelCase function names)
 - REST servers: `{serverIdentifier}_{endpointName}` (camelCase endpoint names)
 
-### AgentServer Interface
+### Memory System Interfaces
 
-Interface for HTTP server management that can be customized for different environments:
+The memory system provides persistent storage and context management for agents:
 
 ```typescript
-export interface AgentServer {
-  start(handler: RequestHandler): Promise<void>;
-  stop(): Promise<void>;
+// Main memory repository interface
+export interface MemoryRepository {
+  remember(sentence: string, importance?: number, tags: string[]): Promise<string>;
+  recall(id: string): Promise<AgentMemory | null>;
+  search(options: MemorySearchOptions): Promise<AgentMemory[]>;
+  editImportance(id: string, importance: number): Promise<boolean>;
+  editContent(id: string, sentence: string): Promise<boolean>;
+  addTag(id: string, tag: string): Promise<boolean>;
+  removeTag(id: string, tag: string): Promise<boolean>;
+  forget(id: string): Promise<boolean>;
+  getStats(): Promise<MemoryStats>;
 }
 
-// Express-based default implementation with middleware support
-export class ExpressAgentServer implements AgentServer {
-  constructor(private port: number, private endpoint: string = '/agent') {}
-  
-  // Add middleware for CORS, auth, logging, etc.
-  useMiddleware(middleware: ExpressMiddleware): this;
-  // Implementation handles Express server lifecycle
+// Persistent storage interface (SQLite, PostgreSQL, etc.)
+export interface PersistentMemory {
+  initialize(): Promise<void>;
+  store(memory: MemoryItem): Promise<void>;
+  retrieve(id: string): Promise<AgentMemory | null>;
+  search(options: MemorySearchOptions): Promise<AgentMemory[]>;
+  update(id: string, updates: Partial<MemoryItem>): Promise<boolean>;
+  delete(id: string): Promise<boolean>;
+  count(): Promise<number>;
+  close(): Promise<void>;
+}
+
+// Short-term cache interface (LRU, Redis, etc.)
+export interface ShortTermMemory {
+  get(id: string): AgentMemory | null;
+  put(memory: MemoryItem): MemoryItem | null;
+  remove(id: string): AgentMemory | null;
+  getAll(): AgentMemory[];
+  getCurrentTokenCount(): number;
+  getMaxTokenCount(): number;
+  clear(): void;
 }
 ```
 
-**Key responsibilities:**
-- HTTP server lifecycle management (start/stop)
-- Route setup happens during start() with the provided handler
-- Request/response handling with JSON parsing
-- Middleware support for customization
-- Default implementation uses Express.js
+**Key implementations:**
+- **AgentMemoryRepository**: Two-tier orchestrator combining persistent and short-term storage
+- **SQLiteMemory**: Production-ready persistent storage with full-text search and indexing
+- **LRUShortTermMemory**: Token-based LRU cache with automatic eviction
+- **createSQLiteMemoryRepository()**: Factory for production setup
+- **createDefaultMemoryRepository()**: Factory for development (in-memory SQLite)
 
 ## 📋 Model Types (Copied from Cubicler)
 
@@ -288,21 +353,37 @@ server.useMiddleware((req, res, next) => {
 
 ## 🔄 Usage Examples
 
-### Basic Usage
+### Basic Usage with Memory
 
 ```typescript
-import { CubicAgent, AxiosAgentClient, ExpressAgentServer, AgentRequest, RawAgentResponse } from 'cubicagentkit';
+import { CubicAgent, AxiosAgentClient, ExpressAgentServer, createSQLiteMemoryRepository } from 'cubicagentkit';
 
-// Create client and server with built-in implementations
+// Create client, server, and memory with built-in implementations
 const client = new AxiosAgentClient('http://localhost:1503');
 const server = new ExpressAgentServer(3000, '/agent');
-const cubicAgent = new CubicAgent(client, server);
+const memory = await createSQLiteMemoryRepository('./agent-memories.db');
+const cubicAgent = new CubicAgent(client, server, memory);
 
 // Start server with dispatch handler
 try {
-  await cubicAgent.start(async (request: AgentRequest, client: AgentClient, context: CallContext) => {
-    // Your AI processing logic here
+  await cubicAgent.start(async (request, client, context) => {
     const lastMessage = request.messages[request.messages.length - 1];
+    
+    // Store user preferences in memory
+    if (lastMessage.content?.includes('I prefer')) {
+      const memoryId = await context.memory?.remember(
+        lastMessage.content,
+        0.8,
+        ['user_preference', 'communication']
+      );
+    }
+    
+    // Search relevant memories for context
+    const relevantMemories = await context.memory?.search({
+      tags: ['user_preference'],
+      limit: 3,
+      sortBy: 'importance'
+    });
     
     // Call Cubicler tools if needed
     if (lastMessage.content?.includes('weather')) {
@@ -310,6 +391,13 @@ try {
         city: 'Paris',
         country: 'France'
       });
+      
+      // Store the interaction
+      await context.memory?.remember(
+        `User asked about weather in Paris, temperature was ${weatherData.temperature}°C`,
+        0.6,
+        ['weather', 'interaction', 'paris']
+      );
       
       return {
         type: 'text',
@@ -332,10 +420,10 @@ try {
 }
 ```
 
-### With Middleware
+### With Middleware and Custom Memory
 
 ```typescript
-import { CubicAgent, AxiosAgentClient, ExpressAgentServer } from 'cubicagentkit';
+import { CubicAgent, AxiosAgentClient, ExpressAgentServer, createDefaultMemoryRepository } from 'cubicagentkit';
 
 // Create client with authentication middleware
 const client = new AxiosAgentClient('http://localhost:1503')
@@ -351,14 +439,21 @@ const server = new ExpressAgentServer(3000, '/agent')
     next();
   });
 
-const cubicAgent = new CubicAgent(client, server);
+// Create in-memory SQLite for development
+const memory = await createDefaultMemoryRepository(2000, 0.7);
 
-// Same dispatch handler pattern
+const cubicAgent = new CubicAgent(client, server, memory);
+
+// Same dispatch handler pattern with memory
 await cubicAgent.start(async (request, client, context) => {
-  // Your logic here - client already has auth, server has CORS
+  // Memory operations
+  const stats = await context.memory?.getStats();
+  console.log(`Memory usage: ${stats?.shortTermCount} memories in cache`);
+  
+  // Your logic here - client already has auth, server has CORS, memory available
   return {
     type: 'text',
-    content: 'Processing complete',
+    content: 'Processing complete with memory context',
     usedToken: 10
   };
 });
@@ -458,21 +553,36 @@ try {
 ```typescript
 // src/index.ts - Main exports
 export { CubicAgent } from './core/cubic-agent.js';
-export { AxiosAgentClient } from './core/axios-agent-client.js';
-export { ExpressAgentServer } from './core/express-agent-server.js';
+export { AxiosAgentClient } from './client/axios-agent-client.js';
+export { ExpressAgentServer } from './server/express-agent-server.js';
+
+// Memory system
+export { 
+  AgentMemoryRepository, 
+  SQLiteMemory, 
+  LRUShortTermMemory,
+  createDefaultMemoryRepository,
+  createSQLiteMemoryRepository 
+} from './memory/memory-index.js';
 
 // Interfaces
 export type { AgentClient } from './interface/agent-client.js';
 export type { AgentServer, DispatchHandler, CallContext } from './interface/agent-server.js';
+export type { MemoryRepository, AgentMemory, MemorySearchOptions } from './interface/memory-repository.js';
+export type { PersistentMemory } from './interface/persistent-memory.js';
+export type { ShortTermMemory } from './interface/short-term-memory.js';
 
 // Model types
 export type { AgentRequest } from './model/agent-request.js';
 export type { AgentResponse, RawAgentResponse } from './model/agent-response.js';
 export type { JSONValue, JSONObject, JSONArray } from './model/types.js';
 
+// Memory types
+export type { MemoryConfig, MemoryItem, MemoryStats } from './memory/memory-types.js';
+
 // Middleware types
-export type { RequestMiddleware } from './core/axios-agent-client.js';
-export type { ExpressMiddleware } from './core/express-agent-server.js';
+export type { RequestMiddleware } from './client/axios-agent-client.js';
+export type { ExpressMiddleware } from './server/express-agent-server.js';
 ```
 
 ## 🔧 Linting and Code Quality Rules
@@ -500,6 +610,8 @@ When I ask you for code, your job is to:
  • Ensure all public APIs are well-documented with JSDoc
  • Write comprehensive tests with mocked dependencies
  • Support middleware patterns for both client and server components
+ • Implement memory system with sentence-based storage and proper interfaces
+ • Use SQLite for production persistence and LRU caching for performance
 
 ## ✅ DO NOT
 
@@ -510,8 +622,10 @@ When I ask you for code, your job is to:
  • Do not over-engineer - keep the core CubicAgent class simple and complete
  • Do not sacrifice type safety or testability
  • Do not make assumptions about how implementers want to handle errors
+ • Do not use mock implementations in production code - use proper SQLite storage
+ • Do not create complex memory hierarchies - keep it simple with two-tier system
 
-When working on CubicAgentKit, focus on creating a simple, complete, and testable library that makes it easy for developers to create Cubicler-compatible AI agents using composition and dependency injection patterns.
+When working on CubicAgentKit, focus on creating a simple, complete, and testable library that makes it easy for developers to create Cubicler-compatible AI agents using composition and dependency injection patterns with robust memory capabilities.
 
 ## 🌍 Global Development Standards & Best Practices
 

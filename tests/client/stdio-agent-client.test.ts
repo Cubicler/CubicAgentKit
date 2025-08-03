@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { MCPRequest, MCPResponse } from '../../src/model/mcp-protocol.js';
+import { MCPRequest, MCPResponse } from '../../src/model/mcp.js';
 
 // Mock child_process.spawn
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
 }));
 
-import { StdioAgentClient } from '../../src/core/stdio-agent-client.js';
+import { StdioAgentClient } from '../../src/client/stdio-agent-client.js';
 import { spawn } from 'child_process';
 
 const mockSpawn = vi.mocked(spawn);
@@ -90,7 +90,7 @@ describe('StdioAgentClient', () => {
 
       // Should send initialize request
       expect(mockProcess.stdin.writtenData).toHaveLength(2); // init + initialized notification
-      const initRequest = JSON.parse(mockProcess.stdin.writtenData[0]);
+      const initRequest = JSON.parse(mockProcess.stdin.writtenData[0]!);
       expect(initRequest).toMatchObject({
         jsonrpc: '2.0',
         method: 'initialize',
@@ -106,7 +106,7 @@ describe('StdioAgentClient', () => {
       });
 
       // Should send initialized notification
-      const initializedNotification = JSON.parse(mockProcess.stdin.writtenData[1]);
+      const initializedNotification = JSON.parse(mockProcess.stdin.writtenData[1]!);
       expect(initializedNotification).toMatchObject({
         jsonrpc: '2.0',
         method: 'notifications/initialized'
@@ -184,7 +184,7 @@ describe('StdioAgentClient', () => {
       expect(result).toEqual({ temperature: 20, condition: 'sunny' });
 
       // Check the tool call request
-      const toolCallRequest = JSON.parse(mockProcess.stdin.writtenData[2]); // After init and initialized
+      const toolCallRequest = JSON.parse(mockProcess.stdin.writtenData[2]!); // After init and initialized
       expect(toolCallRequest).toMatchObject({
         jsonrpc: '2.0',
         method: 'tools/call',

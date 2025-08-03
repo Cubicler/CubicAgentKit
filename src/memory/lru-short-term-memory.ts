@@ -1,33 +1,34 @@
-import { Memory, ShortTermMemory } from './memory-types.js';
-import { countWords } from './memory-utils.js';
+import { AgentMemory } from '../interface/memory-repository.js';
+import { ShortTermMemory } from '../interface/short-term-memory.js';
+import { MemoryItem } from '../model/memory.js';
+import { countWords } from '../utils/memory-utils.js';
 
 /**
  * Node for doubly-linked list in LRU implementation
  */
 class LRUNode {
   constructor(
-    public memory: Memory,
+    public memory: MemoryItem,
     public prev: LRUNode | null = null,
     public next: LRUNode | null = null
   ) {}
 }
 
 /**
- * LRU-based short-term memory implementation
- * Maintains memories in-memory with word-based capacity management
+ * LRU-based short-term memory for sentences with token-based capacity
  */
 export class LRUShortTermMemory implements ShortTermMemory {
-  private memoryMap = new Map<string, LRUNode>();
+  private readonly memoryMap = new Map<string, LRUNode>();
   private head: LRUNode | null = null; // Most recently used
   private tail: LRUNode | null = null; // Least recently used
-  private currentWordCount = 0;
+  private currentTokenCount = 0;
 
-  constructor(private readonly maxWordCount: number) {}
+  constructor(private readonly maxTokenCount: number) {}
 
   /**
    * Get memory from cache (moves to front if found)
    */
-  get(id: string): Memory | null {
+  get(id: string): AgentMemory | null {
     const node = this.memoryMap.get(id);
     if (!node) {
       return null;
@@ -35,36 +36,36 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
     // Move to front (most recently used)
     this.moveToFront(node);
-    return node.memory;
+    return this.nodeToAgentMemory(node);
   }
 
   /**
    * Put memory in cache (may evict LRU items)
    */
-  put(memory: Memory): Memory | null {
+  put(memory: MemoryItem): MemoryItem | null {
     const existingNode = this.memoryMap.get(memory.id);
     
     if (existingNode) {
       // Update existing memory
-      const oldWordCount = countWords(existingNode.memory.body);
-      const newWordCount = countWords(memory.body);
+      const oldTokenCount = countWords(existingNode.memory.sentence);
+      const newTokenCount = countWords(memory.sentence);
       
       existingNode.memory = memory;
-      this.currentWordCount = this.currentWordCount - oldWordCount + newWordCount;
+      this.currentTokenCount = this.currentTokenCount - oldTokenCount + newTokenCount;
       
       // Move to front
       this.moveToFront(existingNode);
       
-      // Check if we need to evict due to increased word count
+      // Check if we need to evict due to increased token count
       return this.evictIfNeeded();
     }
 
     // Add new memory
-    const newWordCount = countWords(memory.body);
+    const newTokenCount = countWords(memory.sentence);
     const newNode = new LRUNode(memory);
     
     this.memoryMap.set(memory.id, newNode);
-    this.currentWordCount += newWordCount;
+    this.currentTokenCount += newTokenCount;
     
     // Add to front
     this.addToFront(newNode);
@@ -76,7 +77,7 @@ export class LRUShortTermMemory implements ShortTermMemory {
   /**
    * Remove memory from cache
    */
-  remove(id: string): Memory | null {
+  remove(id: string): AgentMemory | null {
     const node = this.memoryMap.get(id);
     if (!node) {
       return null;
@@ -84,20 +85,20 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
     this.removeNode(node);
     this.memoryMap.delete(id);
-    this.currentWordCount -= countWords(node.memory.body);
+    this.currentTokenCount -= countWords(node.memory.sentence);
     
-    return node.memory;
+    return this.nodeToAgentMemory(node);
   }
 
   /**
    * Get all memories in cache (most recently used first)
    */
-  getAll(): Memory[] {
-    const memories: Memory[] = [];
+  getAll(): AgentMemory[] {
+    const memories: AgentMemory[] = [];
     let current = this.head;
     
     while (current) {
-      memories.push(current.memory);
+      memories.push(this.nodeToAgentMemory(current));
       current = current.next;
     }
     
@@ -105,17 +106,17 @@ export class LRUShortTermMemory implements ShortTermMemory {
   }
 
   /**
-   * Get current word count
+   * Get current token count
    */
-  getCurrentWordCount(): number {
-    return this.currentWordCount;
+  getCurrentTokenCount(): number {
+    return this.currentTokenCount;
   }
 
   /**
-   * Get maximum word capacity
+   * Get maximum token capacity
    */
-  getMaxWordCount(): number {
-    return this.maxWordCount;
+  getMaxTokenCount(): number {
+    return this.maxTokenCount;
   }
 
   /**
@@ -125,12 +126,23 @@ export class LRUShortTermMemory implements ShortTermMemory {
     this.memoryMap.clear();
     this.head = null;
     this.tail = null;
-    this.currentWordCount = 0;
+    this.currentTokenCount = 0;
+  }
+
+  /**
+   * Convert internal node to AgentMemory
+   */
+  private nodeToAgentMemory(node: LRUNode): AgentMemory {
+    return new AgentMemory(
+      node.memory.id,
+      node.memory.sentence,
+      node.memory.importance,
+      [...node.memory.tags] // Clone array to prevent mutation
+    );
   }
 
   /**
    * Move node to front of the list (most recently used)
-   * @private
    */
   private moveToFront(node: LRUNode): void {
     if (node === this.head) {
@@ -146,7 +158,6 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
   /**
    * Add node to front of the list
-   * @private
    */
   private addToFront(node: LRUNode): void {
     node.prev = null;
@@ -165,7 +176,6 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
   /**
    * Remove node from the list
-   * @private
    */
   private removeNode(node: LRUNode): void {
     if (node.prev) {
@@ -183,12 +193,11 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
   /**
    * Evict least recently used items if over capacity
-   * @private
    */
-  private evictIfNeeded(): Memory | null {
-    let evictedMemory: Memory | null = null;
+  private evictIfNeeded(): MemoryItem | null {
+    let evictedMemory: MemoryItem | null = null;
     
-    while (this.currentWordCount > this.maxWordCount && this.tail) {
+    while (this.currentTokenCount > this.maxTokenCount && this.tail) {
       const evicted = this.evictLRU();
       if (evicted && !evictedMemory) {
         evictedMemory = evicted; // Return the first evicted memory
@@ -200,9 +209,8 @@ export class LRUShortTermMemory implements ShortTermMemory {
 
   /**
    * Evict the least recently used item
-   * @private
    */
-  private evictLRU(): Memory | null {
+  private evictLRU(): MemoryItem | null {
     if (!this.tail) {
       return null;
     }
@@ -210,7 +218,7 @@ export class LRUShortTermMemory implements ShortTermMemory {
     const evictedNode = this.tail;
     this.removeNode(evictedNode);
     this.memoryMap.delete(evictedNode.memory.id);
-    this.currentWordCount -= countWords(evictedNode.memory.body);
+    this.currentTokenCount -= countWords(evictedNode.memory.sentence);
     
     return evictedNode.memory;
   }

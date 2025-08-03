@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
-import { MCPRequest, MCPResponse } from '../model/mcp-protocol.js';
+import { MCPRequest, MCPResponse, MinimalMCPRequest } from '../model/mcp.js';
 
 /**
  * Stdio-based implementation of AgentClient for MCP communication with cubicler server
@@ -10,7 +10,7 @@ import { MCPRequest, MCPResponse } from '../model/mcp-protocol.js';
 export class StdioAgentClient implements AgentClient {
   private process: ChildProcess | null = null;
   private requestId: number = 1;
-  private pendingRequests = new Map<number, { resolve: (value: JSONValue) => void; reject: (error: Error) => void }>();
+  private readonly pendingRequests = new Map<number, { resolve: (value: JSONValue) => void; reject: (error: Error) => void }>();
   private isInitialized = false;
 
   /**
@@ -70,7 +70,7 @@ export class StdioAgentClient implements AgentClient {
         for (const line of lines) {
           if (line.trim()) {
             try {
-              const response: MCPResponse = JSON.parse(line);
+              const response = JSON.parse(line) as MCPResponse;
               this.handleResponse(response);
             } catch (error) {
               console.error('Failed to parse MCP response:', line, error);
@@ -195,7 +195,7 @@ export class StdioAgentClient implements AgentClient {
    * @param message - The message to send
    * @private
    */
-  private sendMessage(message: any): void {
+  private sendMessage(message: MinimalMCPRequest): void {
     if (!this.process?.stdin) {
       throw new Error('Cubicler process not available');
     }
@@ -253,6 +253,7 @@ export class StdioAgentClient implements AgentClient {
   /**
    * Gracefully shutdown the client and terminate the cubicler process
    */
+  // eslint-disable-next-line @typescript-eslint/require-await -- Interface may require async in future
   async shutdown(): Promise<void> {
     this.cleanup();
   }

@@ -57,8 +57,7 @@ export default tseslint.config(
       '.nyc_output/',
       'tsup.config.ts',
       'vitest.config.ts',
-      'tests/**/fixtures/**/*.js', // Exclude test fixture JS files
-      'tests/fixtures/**/*.js', // Exclude test fixture JS files
+      'tests/**/fixtures/**/*.js', // Exclude test fixture JS files (integration tests)
     ],
   }
 );

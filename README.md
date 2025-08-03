@@ -12,6 +12,7 @@ A modern Node.js library for creating AI agents that integrate seamlessly with *
 - **🔌 Composition-Based**: Uses dependency injection for easy testing and flexibility
 - **📡 Built-in HTTP Client**: `AxiosAgentClient` with middleware support for Cubicler MCP communication
 - **🌐 Built-in HTTP Server**: `ExpressAgentServer` with middleware support for agent endpoints
+- **🧠 Memory System**: SQLite-based persistent memory with LRU short-term caching
 - **📊 Tool Call Tracking**: Automatic tracking of tool usage per request
 - **🛡️ Type-Safe**: Full TypeScript support with strict typing
 - **🔍 Error Transparent**: All errors thrown up to implementers for custom handling
@@ -30,19 +31,41 @@ import {
   CubicAgent, 
   AxiosAgentClient, 
   ExpressAgentServer,
+  createDefaultMemoryRepository,
   AgentRequest, 
   RawAgentResponse 
 } from '@cubicler/cubicagentkit';
 
-// Create client and server with built-in implementations
+// Create client, server, and memory system
 const client = new AxiosAgentClient('http://localhost:1503');
 const server = new ExpressAgentServer(3000, '/agent');
-const cubicAgent = new CubicAgent(client, server);
+const memory = await createDefaultMemoryRepository(); // SQLite in-memory
+const cubicAgent = new CubicAgent(client, server, memory);
 
 // Start server with dispatch handler
 try {
   await cubicAgent.start(async (request, client, context) => {
     const lastMessage = request.messages[request.messages.length - 1];
+    
+    // Use memory system
+    if (lastMessage.content?.includes('remember')) {
+      const memoryId = await context.memory?.remember(
+        'User likes detailed explanations', 
+        0.8, 
+        ['preference', 'communication']
+      );
+      return {
+        type: 'text',
+        content: `I'll remember that! (Memory ID: ${memoryId})`,
+        usedToken: 30
+      };
+    }
+    
+    // Search memories for context
+    const memories = await context.memory?.search({ 
+      tags: ['preference'], 
+      limit: 3 
+    });
     
     // Call Cubicler tools if needed
     if (lastMessage.content?.includes('weather')) {
@@ -82,27 +105,39 @@ CubicAgentKit follows a **composition-based architecture** with clean separation
 └─────────────────┘    └──────────────────┘    └──────────────────┘
          │
          │              ┌──────────────────┐    ┌──────────────────┐
-         └──────────────│  AgentServer     │────│ExpressAgentServer│
-                        │  (Interface)     │    │ (HTTP Server)    │
+         ├──────────────│  AgentServer     │────│ExpressAgentServer│
+         │              │  (Interface)     │    │ (HTTP Server)    │
+         │              └──────────────────┘    └──────────────────┘
+         │
+         |              ┌──────────────────┐    ┌──────────────────┐
+         └──────────────│ MemoryRepository │────│ SQLiteMemory +   │
+                        │  (Interface)     │    │ LRUShortTerm     │
                         └──────────────────┘    └──────────────────┘
 ```
 
 ### Core Components
 
-- **`CubicAgent`**: Main orchestrator handling server lifecycle and request routing
+- **`CubicAgent`**: Main orchestrator handling server lifecycle, request routing, and memory integration
 - **`AxiosAgentClient`**: HTTP client implementing Cubicler's MCP protocol  
 - **`ExpressAgentServer`**: HTTP server handling agent endpoint requests
 - **`TrackingAgentClient`**: Wrapper providing automatic tool call counting
+- **`AgentMemoryRepository`**: Two-tier memory system with persistent storage and LRU cache
+- **`SQLiteMemory`**: Production-ready persistent storage with full-text search
+- **`LRUShortTermMemory`**: Token-based LRU cache for frequently accessed memories
 
 ## 📝 API Reference
 
 ### CubicAgent
 
-Main class for creating and managing Cubicler agents.
+Main class for creating and managing Cubicler agents with optional memory integration.
 
 ```typescript
 class CubicAgent {
-  constructor(agentClient: AgentClient, server: AgentServer)
+  constructor(
+    agentClient: AgentClient, 
+    server: AgentServer, 
+    memory?: MemoryRepository
+  )
   
   async start(handler: DispatchHandler): Promise<void>
   async stop(): Promise<void>
@@ -113,6 +148,42 @@ type DispatchHandler = (
   client: AgentClient,
   context: CallContext
 ) => Promise<RawAgentResponse>
+
+interface CallContext {
+  readonly toolCallCount: number;
+  memory?: MemoryRepository;
+}
+```
+
+### Memory System
+
+Sentence-based memory system with SQLite persistence and LRU caching.
+
+```typescript
+// Factory functions for easy setup
+async function createDefaultMemoryRepository(
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
+async function createSQLiteMemoryRepository(
+  dbPath: string,
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
+// Core memory operations
+interface MemoryRepository {
+  remember(sentence: string, importance?: number, tags: string[]): Promise<string>
+  recall(id: string): Promise<AgentMemory | null>
+  search(options: MemorySearchOptions): Promise<AgentMemory[]>
+  editImportance(id: string, importance: number): Promise<boolean>
+  editContent(id: string, sentence: string): Promise<boolean>
+  addTag(id: string, tag: string): Promise<boolean>
+  removeTag(id: string, tag: string): Promise<boolean>
+  forget(id: string): Promise<boolean>
+  getStats(): Promise<MemoryStats>
+}
 ```
 
 ### AxiosAgentClient
@@ -144,6 +215,119 @@ class ExpressAgentServer implements AgentServer {
 ```
 
 ## 🔧 Advanced Usage
+
+### Memory System Usage
+
+The memory system provides persistent storage for agent context and user preferences:
+
+```typescript
+import { createSQLiteMemoryRepository } from '@cubicler/cubicagentkit';
+
+// Create production memory with file-based SQLite
+const memory = await createSQLiteMemoryRepository('./agent-memories.db', 2000, 0.7);
+
+const cubicAgent = new CubicAgent(client, server, memory);
+
+await cubicAgent.start(async (request, client, context) => {
+  const lastMessage = request.messages[request.messages.length - 1];
+  
+  // Store important information
+  if (lastMessage.content?.includes('I prefer')) {
+    const memoryId = await context.memory?.remember(
+      lastMessage.content,
+      0.9, // High importance for preferences
+      ['user_preference', 'communication']
+    );
+  }
+  
+  // Search for relevant context
+  const relevantMemories = await context.memory?.search({
+    content: 'prefer',
+    tags: ['user_preference'],
+    sortBy: 'importance',
+    limit: 5
+  });
+  
+  // Use memories to personalize response
+  let response = "Hello!";
+  if (relevantMemories && relevantMemories.length > 0) {
+    response = `Hello! I remember you prefer ${relevantMemories[0].sentence}`;
+  }
+  
+  return {
+    type: 'text',
+    content: response,
+    usedToken: 30
+  };
+});
+```
+
+### Memory Search Options
+
+```typescript
+interface MemorySearchOptions {
+  content?: string;        // Text search in sentences
+  contentRegex?: string;   // Regex pattern for content
+  tags?: string[];         // Must have ALL these tags
+  tagsRegex?: string;      // Regex pattern for tags
+  sortBy?: 'importance' | 'timestamp' | 'both';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+}
+
+// Example searches
+const recentMemories = await memory.search({
+  sortBy: 'timestamp',
+  sortOrder: 'desc',
+  limit: 10
+});
+
+const importantPreferences = await memory.search({
+  tags: ['preference'],
+  sortBy: 'importance',
+  sortOrder: 'desc'
+});
+
+const weatherRelated = await memory.search({
+  contentRegex: 'weather|temperature|forecast',
+  limit: 5
+});
+```
+
+### Custom Memory Implementations
+
+Create custom storage backends by implementing the interfaces:
+
+```typescript
+import { PersistentMemory, ShortTermMemory } from '@cubicler/cubicagentkit';
+
+class RedisMemory implements PersistentMemory {
+  async initialize(): Promise<void> {
+    // Connect to Redis
+  }
+  
+  async store(memory: MemoryItem): Promise<void> {
+    // Store in Redis with JSON serialization
+  }
+  
+  // ... implement all required methods
+}
+
+class CustomLRUCache implements ShortTermMemory {
+  async get(id: string): Promise<AgentMemory | null> {
+    // Custom cache implementation
+  }
+  
+  // ... implement all required methods
+}
+
+// Use custom implementations
+const customMemory = new AgentMemoryRepository(
+  new RedisMemory(),
+  new CustomLRUCache(),
+  { defaultImportance: 0.6 }
+);
+```
 
 ### With Middleware
 
@@ -189,8 +373,17 @@ await cubicAgent.start(async (request, client, context) => {
     country: 'France'
   });
   
-  // Access tool call count
+  // Access tool call count and memory
   console.log(`Used ${context.toolCallCount} tools in this request`);
+  
+  // Store the interaction in memory
+  if (context.memory) {
+    await context.memory.remember(
+      `User asked about weather in Paris, temperature was ${weather.temperature}°C`,
+      0.6,
+      ['weather', 'interaction', 'paris']
+    );
+  }
   
   return {
     type: 'text',

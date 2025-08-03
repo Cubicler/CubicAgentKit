@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { LRUShortTermMemory } from '../../src/memory/lru-short-term-memory.js';
-import { Memory } from '../../src/memory/memory-types.js';
+import { LRUShortTermMemory, MemoryItem } from '../../src/memory/memory-index.js';
+import { AgentMemory } from '../../src/interface/memory-repository.js';
 
 describe('LRUShortTermMemory', () => {
   let memory: LRUShortTermMemory;
@@ -9,12 +9,12 @@ describe('LRUShortTermMemory', () => {
     memory = new LRUShortTermMemory(100); // 100 word capacity
   });
 
-  const createMemory = (id: string, body: string, score: number = 0.5): Memory => ({
+  const createMemory = (id: string, sentence: string, importance: number = 0.5): MemoryItem => ({
     id,
     timestamp: Date.now(),
-    score,
+    importance,
     tags: [],
-    body
+    sentence
   });
 
   describe('basic operations', () => {
@@ -23,7 +23,11 @@ describe('LRUShortTermMemory', () => {
       memory.put(mem);
       
       const retrieved = memory.get('test1');
-      expect(retrieved).toEqual(mem);
+      expect(retrieved).not.toBe(null);
+      expect(retrieved?.id).toBe('test1');
+      expect(retrieved?.sentence).toBe('hello world');
+      expect(retrieved?.importance).toBe(0.5);
+      expect(retrieved?.tags).toEqual([]);
     });
 
     it('should return null for non-existent memory', () => {
@@ -35,7 +39,11 @@ describe('LRUShortTermMemory', () => {
       memory.put(mem);
       
       const removed = memory.remove('test1');
-      expect(removed).toEqual(mem);
+      expect(removed).not.toBe(null);
+      expect(removed?.id).toBe('test1');
+      expect(removed?.sentence).toBe('hello world');
+      expect(removed?.importance).toBe(0.5);
+      expect(removed?.tags).toEqual([]);
       expect(memory.get('test1')).toBe(null);
     });
 
@@ -47,7 +55,7 @@ describe('LRUShortTermMemory', () => {
       
       memory.clear();
       expect(memory.getAll()).toHaveLength(0);
-      expect(memory.getCurrentWordCount()).toBe(0);
+      expect(memory.getCurrentTokenCount()).toBe(0);
     });
   });
 
@@ -65,7 +73,8 @@ describe('LRUShortTermMemory', () => {
       memory.get('first');
       
       const all = memory.getAll();
-      expect(all[0].id).toBe('first'); // Should be at front
+      expect(all.length).toBeGreaterThan(0);
+      expect(all[0]?.id).toBe('first'); // Should be at front
     });
 
     it('should evict least recently used when over capacity', () => {
@@ -93,28 +102,28 @@ describe('LRUShortTermMemory', () => {
 
   describe('word counting', () => {
     it('should track word count correctly', () => {
-      expect(memory.getCurrentWordCount()).toBe(0);
+      expect(memory.getCurrentTokenCount()).toBe(0);
       
       memory.put(createMemory('test1', 'hello world')); // 2 words
-      expect(memory.getCurrentWordCount()).toBe(2);
+      expect(memory.getCurrentTokenCount()).toBe(2);
       
       memory.put(createMemory('test2', 'foo bar baz')); // 3 words
-      expect(memory.getCurrentWordCount()).toBe(5);
+      expect(memory.getCurrentTokenCount()).toBe(5);
       
       memory.remove('test1');
-      expect(memory.getCurrentWordCount()).toBe(3);
+      expect(memory.getCurrentTokenCount()).toBe(3);
     });
 
     it('should update word count when updating existing memory', () => {
       memory.put(createMemory('test1', 'hello')); // 1 word
-      expect(memory.getCurrentWordCount()).toBe(1);
+      expect(memory.getCurrentTokenCount()).toBe(1);
       
       memory.put(createMemory('test1', 'hello world test')); // 3 words
-      expect(memory.getCurrentWordCount()).toBe(3);
+      expect(memory.getCurrentTokenCount()).toBe(3);
     });
 
     it('should return correct max word count', () => {
-      expect(memory.getMaxWordCount()).toBe(100);
+      expect(memory.getMaxTokenCount()).toBe(100);
     });
   });
 
@@ -128,7 +137,7 @@ describe('LRUShortTermMemory', () => {
       memory.get('second');
       
       const all = memory.getAll();
-      expect(all.map(m => m.id)).toEqual(['second', 'third', 'first']);
+      expect(all.map((m: AgentMemory) => m.id)).toEqual(['second', 'third', 'first']);
     });
 
     it('should handle empty memory', () => {
@@ -145,7 +154,7 @@ describe('LRUShortTermMemory', () => {
       
       // With capacity of 5 and memory of 10 words, it should be evicted immediately
       // This is expected behavior for LRU with insufficient capacity
-      expect(largeMemory.getCurrentWordCount()).toBeLessThanOrEqual(5);
+      expect(largeMemory.getCurrentTokenCount()).toBeLessThanOrEqual(5);
     });
 
     it('should handle zero capacity', () => {
@@ -154,7 +163,7 @@ describe('LRUShortTermMemory', () => {
       zeroMemory.put(createMemory('test', 'hello'));
       // Should immediately evict due to zero capacity
       expect(zeroMemory.get('test')).toBe(null);
-      expect(zeroMemory.getCurrentWordCount()).toBe(0);
+      expect(zeroMemory.getCurrentTokenCount()).toBe(0);
     });
 
     it('should handle updating non-existent memory', () => {

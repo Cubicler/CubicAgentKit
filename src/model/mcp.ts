@@ -6,12 +6,18 @@
 import { JSONValue, JSONObject } from './types.js';
 
 /**
- * MCP Request structure following JSON-RPC 2.0
+ * Minimal MCP message structure (for notifications and requests)
  */
-export interface MCPRequest {
+export interface MinimalMCPRequest {
   jsonrpc: '2.0';
   method: string;
   params?: JSONObject;
+}
+
+/**
+ * MCP Request structure following JSON-RPC 2.0 (extends MinimalMCPRequest with id)
+ */
+export interface MCPRequest extends MinimalMCPRequest {
   id: string | number;
 }
 

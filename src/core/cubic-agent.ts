@@ -1,6 +1,7 @@
 import { AgentClient } from '../interface/agent-client.js';
 import { AgentServer, DispatchHandler, CallContext } from '../interface/agent-server.js';
-import { TrackingAgentClient } from './tracking-agent-client.js';
+import { MemoryRepository } from '../interface/memory-repository.js';
+import { TrackingAgentClient } from '../client/tracking-agent-client.js';
 
 /**
  * Main orchestrator class for CubicAgent
@@ -13,10 +14,12 @@ export class CubicAgent {
    * Creates a new CubicAgent instance
    * @param agentClient - The client for communicating with Cubicler
    * @param server - The server implementation for handling HTTP requests
+   * @param memory - Optional memory repository for agent context
    */
   constructor(
     private readonly agentClient: AgentClient,
-    private readonly server: AgentServer
+    private readonly server: AgentServer,
+    private readonly memory?: MemoryRepository
   ) {}
 
   /**
@@ -36,11 +39,12 @@ export class CubicAgent {
       // Create a fresh tracking client for this specific request
       const trackingClient = new TrackingAgentClient(this.agentClient);
       
-      // Create context with access to the tracking client's call count
+      // Create context with access to the tracking client's call count and optional memory
       const context: CallContext = {
         get toolCallCount() {
           return trackingClient.getCallCount();
-        }
+        },
+        memory: this.memory
       };
       
       const response = await handler(request, trackingClient, context);

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { StdioAgentServer } from '../../src/core/stdio-agent-server.js';
+import { StdioAgentServer } from '../../src/server/stdio-agent-server.js';
 import { RequestHandler } from '../../src/interface/agent-server.js';
 import { createMockAgentRequest, createMockAgentResponse } from '../mocks/test-helpers.js';
-import { MCPRequest } from '../../src/model/mcp-protocol.js';
+import { MCPRequest } from '../../src/model/mcp.js';
 
 // Mock stdout write function
 const mockWrittenData: string[] = [];
@@ -22,7 +22,7 @@ const mockStdin = {
 
 describe('StdioAgentServer', () => {
   let server: StdioAgentServer;
-  let mockHandler: RequestHandler;
+  let mockHandler: RequestHandler & { mockResolvedValue: any; mockRejectedValue: any };
   let stdinDataHandler: (data: string) => void;
 
   beforeEach(() => {
@@ -58,6 +58,7 @@ describe('StdioAgentServer', () => {
     });
 
     it('should set up signal handlers', () => {
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const mockProcessOn = vi.mocked(process.on);
       expect(mockProcessOn).toHaveBeenCalledWith('SIGINT', expect.any(Function));
       expect(mockProcessOn).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
@@ -74,7 +75,7 @@ describe('StdioAgentServer', () => {
 
       // Should send capabilities announcement
       expect(mockWrittenData).toHaveLength(1);
-      const announcement = JSON.parse(mockWrittenData[0]);
+      const announcement = JSON.parse(mockWrittenData[0]!);
       expect(announcement).toMatchObject({
         jsonrpc: '2.0',
         method: 'notifications/capabilities',
@@ -130,7 +131,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler(JSON.stringify(initRequest) + '\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 1,
@@ -174,7 +175,7 @@ describe('StdioAgentServer', () => {
       const dispatchRequest: MCPRequest = {
         jsonrpc: '2.0',
         method: 'agent/dispatch',
-        params: mockRequest,
+        params: mockRequest as any, // AgentRequest doesn't match JSONObject interface exactly
         id: 2
       };
 
@@ -186,7 +187,7 @@ describe('StdioAgentServer', () => {
       expect(mockHandler).toHaveBeenCalledWith(mockRequest);
       expect(mockWrittenData).toHaveLength(1);
       
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 2,
@@ -205,7 +206,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler(JSON.stringify(unknownRequest) + '\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 3,
@@ -221,7 +222,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler('invalid json\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: null,
@@ -240,14 +241,14 @@ describe('StdioAgentServer', () => {
       const dispatchRequest: MCPRequest = {
         jsonrpc: '2.0',
         method: 'agent/dispatch',
-        params: createMockAgentRequest(),
+        params: createMockAgentRequest() as any, // AgentRequest doesn't match JSONObject interface exactly
         id: 4
       };
 
       stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 4,
@@ -269,7 +270,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 5,
@@ -292,7 +293,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 6,
@@ -310,7 +311,7 @@ describe('StdioAgentServer', () => {
       const dispatchRequest: MCPRequest = {
         jsonrpc: '2.0',
         method: 'agent/dispatch',
-        params: createMockAgentRequest(),
+        params: createMockAgentRequest() as any,
         id: 7
       };
 
@@ -320,7 +321,7 @@ describe('StdioAgentServer', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response).toMatchObject({
         jsonrpc: '2.0',
         id: 7,
@@ -359,8 +360,8 @@ describe('StdioAgentServer', () => {
 
       expect(mockWrittenData).toHaveLength(2);
       
-      const response1 = JSON.parse(mockWrittenData[0]);
-      const response2 = JSON.parse(mockWrittenData[1]);
+      const response1 = JSON.parse(mockWrittenData[0]!);
+      const response2 = JSON.parse(mockWrittenData[1]!);
       
       expect(response1.id).toBe(1);
       expect(response2.id).toBe(2);
@@ -383,7 +384,7 @@ describe('StdioAgentServer', () => {
       stdinDataHandler(requestStr.slice(10));
       expect(mockWrittenData).toHaveLength(1); // Now complete
       
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response.id).toBe(1);
     });
 
@@ -405,7 +406,7 @@ describe('StdioAgentServer', () => {
       const dispatchRequest: MCPRequest = {
         jsonrpc: '2.0',
         method: 'agent/dispatch',
-        params: validRequest,
+        params: validRequest as any,
         id: 1
       };
 
@@ -417,7 +418,7 @@ describe('StdioAgentServer', () => {
       expect(mockHandler).toHaveBeenCalledWith(validRequest);
       expect(mockWrittenData).toHaveLength(1);
       
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response.result).toBeDefined();
       expect(response.error).toBeUndefined();
     });
@@ -442,7 +443,7 @@ describe('StdioAgentServer', () => {
       expect(mockHandler).not.toHaveBeenCalled();
       expect(mockWrittenData).toHaveLength(1);
       
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response.error).toMatchObject({
         code: -32602,
         message: 'Invalid params'
@@ -469,7 +470,7 @@ describe('StdioAgentServer', () => {
       expect(mockHandler).not.toHaveBeenCalled();
       expect(mockWrittenData).toHaveLength(1);
       
-      const response = JSON.parse(mockWrittenData[0]);
+      const response = JSON.parse(mockWrittenData[0]!);
       expect(response.error).toMatchObject({
         code: -32602,
         message: 'Invalid params'

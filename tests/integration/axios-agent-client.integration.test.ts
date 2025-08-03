@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { AxiosAgentClient } from '../../src/core/axios-agent-client.js';
+import { AxiosAgentClient } from '../../src/client/axios-agent-client.js';
 
 describe('AxiosAgentClient Integration Tests', () => {
   const cubiclerUrl = process.env.CUBICLER_URL || 'http://localhost:1504';
