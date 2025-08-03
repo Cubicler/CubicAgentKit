@@ -31,6 +31,13 @@ src/
   interface/
     agent-client.ts              # AgentClient interface
     agent-server.ts              # AgentServer interface and handler types
+  memory/
+    agent-memory-manager.ts      # Main memory orchestrator with two-tier system
+    lru-short-term-memory.ts     # LRU-based short-term memory (in-memory)
+    sqlite-memory-store.ts       # SQLite-based long-term memory storage
+    memory-mcp-tools.ts          # MCP tools for memory operations
+    memory-types.ts              # Memory interfaces and types
+    memory-utils.ts              # Utility functions for memory operations
   model/
     agent-request.ts             # AgentRequest type (from Cubicler)
     agent-response.ts            # AgentResponse & RawAgentResponse types
@@ -38,6 +45,7 @@ src/
     types.ts                     # Common JSON and Cubicler types
 tests/
   core/                          # Unit tests mirroring src/core structure
+  memory/                        # Memory system unit tests
   mocks/                         # Mock implementations and test helpers
   integration/                   # Integration tests (excluded from CI)
 ```

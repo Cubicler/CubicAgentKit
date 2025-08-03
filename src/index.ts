@@ -5,6 +5,15 @@ export { ExpressAgentServer } from './core/express-agent-server.js';
 export { StdioAgentClient } from './core/stdio-agent-client.js';
 export { StdioAgentServer } from './core/stdio-agent-server.js';
 
+// Memory system
+export {
+  AgentMemoryManager,
+  LRUShortTermMemory,
+  SQLiteMemoryStore,
+  MemoryMCPTools,
+  createDefaultMemoryManager
+} from './memory/index.js';
+
 // Interfaces
 export type { AgentClient } from './interface/agent-client.js';
 export type { AgentServer, DispatchHandler, RequestHandler, CallContext } from './interface/agent-server.js';
@@ -23,6 +32,18 @@ export type {
   AgentInfo 
 } from './model/types.js';
 export type { MCPRequest, MCPResponse, MCPError, MCPToolCall } from './model/mcp-protocol.js';
+
+// Memory types
+export type {
+  Memory,
+  MemoryInput,
+  MemoryQuery,
+  MemoryConfig,
+  MemoryStore,
+  ShortTermMemory,
+  MemoryStats,
+  MemorySortComparator
+} from './memory/index.js';
 
 // Middleware types
 export type { RequestMiddleware } from './core/axios-agent-client.js';
