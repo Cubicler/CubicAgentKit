@@ -172,6 +172,12 @@ async function createSQLiteMemoryRepository(
   defaultImportance?: number
 ): Promise<AgentMemoryRepository>
 
+async function createMemoryRepository(
+  longTerm: SQLiteMemory,
+  maxTokens?: number,
+  defaultImportance?: number
+): Promise<AgentMemoryRepository>
+
 // Core memory operations
 interface MemoryRepository {
   remember(sentence: string, importance?: number, tags: string[]): Promise<string>
@@ -259,6 +265,28 @@ await cubicAgent.start(async (request, client, context) => {
     content: response,
     usedToken: 30
   };
+});
+```
+
+### Custom Memory Setup
+
+For more control over the memory system, use the generic factory function:
+
+```typescript
+import { createMemoryRepository, SQLiteMemory } from '@cubicler/cubicagentkit';
+
+// Create custom SQLite instance
+const longTerm = new SQLiteMemory('./custom-path.db');
+
+// Use generic factory with LRU short-term memory as default
+const memory = await createMemoryRepository(longTerm, 3000, 0.8);
+
+const cubicAgent = new CubicAgent(client, server, memory);
+
+// Memory automatically uses LRUShortTermMemory for caching
+await cubicAgent.start(async (request, client, context) => {
+  // Your agent logic with custom memory setup
+  return { type: 'text', content: 'Processing...', usedToken: 10 };
 });
 ```
 

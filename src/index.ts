@@ -11,7 +11,8 @@ export {
   SQLiteMemory,
   LRUShortTermMemory,
   createDefaultMemoryRepository,
-  createSQLiteMemoryRepository
+  createSQLiteMemoryRepository,
+  createMemoryRepository
 } from './memory/memory-index.js';
 
 // Interfaces

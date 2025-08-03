@@ -48,6 +48,28 @@ export async function createDefaultMemoryRepository(
 }
 
 /**
+ * Create a generic memory repository with LRUShortTermMemory as default short-term storage
+ * @param longTerm - Persistent memory implementation
+ * @param maxTokens - Maximum tokens in short-term memory (default: 2000)
+ * @param defaultImportance - Default importance score (default: 0.5)
+ * @returns Configured sentence memory repository with LRU short-term memory
+ */
+export async function createMemoryRepository(
+  longTerm: SQLiteMemory,
+  maxTokens: number = 2000,
+  defaultImportance: number = 0.5
+): Promise<AgentMemoryRepository> {
+  const shortTerm = new LRUShortTermMemory(maxTokens);
+  const repository = new AgentMemoryRepository(longTerm, shortTerm, {
+    shortTermMaxTokens: maxTokens,
+    defaultImportance
+  });
+  
+  await repository.initialize();
+  return repository;
+}
+
+/**
  * Create a production-ready memory setup with SQLite storage
  * @param dbPath - Path to SQLite database file (default: './memories.db')
  * @param maxTokens - Maximum tokens in short-term memory (default: 2000)
