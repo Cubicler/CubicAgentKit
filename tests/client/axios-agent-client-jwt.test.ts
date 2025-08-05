@@ -40,7 +40,9 @@ describe('AxiosAgentClient with JWT Authentication', () => {
       const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Verify axios instance was created
-      expect(mockedAxios.create).toHaveBeenCalledWith({
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const axiosCreateSpy = mockedAxios.create as any;
+      expect(axiosCreateSpy).toHaveBeenCalledWith({
         baseURL: 'http://localhost:3000',
         timeout: 30000,
         headers: {
@@ -100,7 +102,9 @@ describe('AxiosAgentClient with JWT Authentication', () => {
 
       const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
 
-      expect(mockedAxios.create).toHaveBeenCalledTimes(2); // One for client, one for OAuth provider
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const axiosCreateSpy = mockedAxios.create as any;
+      expect(axiosCreateSpy).toHaveBeenCalledTimes(2); // One for client, one for OAuth provider
       expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalled();
       expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
     });

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
 import { MCPRequest, MCPResponse } from '../model/mcp.js';
@@ -89,18 +89,18 @@ export class AxiosAgentClient implements AgentClient {
     // Set up response interceptor to handle token refresh on 401 errors
     this.httpClient.interceptors.response.use(
       (response) => response,
-      async (error: unknown) => {
+      async (error: AxiosError) => {
         interface RetryableRequest extends InternalAxiosRequestConfig {
           _retry?: boolean;
         }
         
-        // Type guard to check if error has the expected structure
-        if (!error || typeof error !== 'object' || !('config' in error)) {
-          return Promise.reject(new Error('Unknown error occurred during request'));
+        // AxiosError always has a config property
+        if (!error.config) {
+          return Promise.reject(new Error('Request configuration not available'));
         }
         
-        const originalRequest = (error as { config: InternalAxiosRequestConfig }).config as RetryableRequest;
-        const errorResponse = 'response' in error ? (error as { response?: { status?: number } }).response : undefined;
+        const originalRequest = error.config as RetryableRequest;
+        const errorResponse = error.response;
         
         if (errorResponse?.status === 401 && !originalRequest._retry && this.jwtAuthProvider) {
           originalRequest._retry = true;
