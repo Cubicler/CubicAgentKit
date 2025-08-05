@@ -2,6 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { JWTMiddlewareConfig, JWTVerificationOptions } from '../interface/jwt-auth.js';
 
 /**
+ * JWT Header interface
+ */
+interface JWTHeader {
+  alg: string;
+  typ?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Decoded JWT payload interface
  */
 export interface JWTPayload {
@@ -12,7 +21,7 @@ export interface JWTPayload {
   iat?: number;
   nbf?: number;
   jti?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -20,7 +29,7 @@ export interface JWTPayload {
  */
 export interface JWTRequest extends Request {
   jwt?: JWTPayload;
-  user?: any;
+  user?: unknown;
 }
 
 /**
@@ -29,7 +38,7 @@ export interface JWTRequest extends Request {
  * a library like 'jsonwebtoken' for more robust JWT handling.
  */
 class SimpleJWTVerifier {
-  constructor(private options: JWTVerificationOptions) {}
+  constructor(private readonly options: JWTVerificationOptions) {}
 
   verify(token: string): JWTPayload {
     try {
@@ -40,8 +49,15 @@ class SimpleJWTVerifier {
       }
 
       // Decode the header and payload
-      const header = JSON.parse(this.base64UrlDecode(parts[0]!));
-      const payload = JSON.parse(this.base64UrlDecode(parts[1]!));
+      const headerPart = parts[0];
+      const payloadPart = parts[1];
+      
+      if (!headerPart || !payloadPart) {
+        throw new Error('Invalid JWT structure');
+      }
+
+      const header = JSON.parse(this.base64UrlDecode(headerPart)) as JWTHeader;
+      const payload = JSON.parse(this.base64UrlDecode(payloadPart)) as JWTPayload;
 
       // Basic algorithm check
       if (this.options.algorithms && !this.options.algorithms.includes(header.alg)) {
@@ -49,7 +65,7 @@ class SimpleJWTVerifier {
       }
 
       // Check expiration
-      if (!this.options.ignoreExpiration && payload.exp) {
+      if (!this.options.ignoreExpiration && typeof payload.exp === 'number') {
         const now = Math.floor(Date.now() / 1000);
         if (now >= payload.exp) {
           throw new Error('JWT token has expired');
@@ -57,7 +73,7 @@ class SimpleJWTVerifier {
       }
 
       // Check not before
-      if (payload.nbf) {
+      if (typeof payload.nbf === 'number') {
         const now = Math.floor(Date.now() / 1000);
         if (now < payload.nbf) {
           throw new Error('JWT token not active yet');
@@ -73,7 +89,8 @@ class SimpleJWTVerifier {
       if (this.options.audience) {
         const audiences = Array.isArray(payload.aud) ? payload.aud : (payload.aud ? [payload.aud] : []);
         if (!audiences.includes(this.options.audience)) {
-          throw new Error(`Invalid audience: ${payload.aud}`);
+          const audValue = Array.isArray(payload.aud) ? payload.aud.join(', ') : (payload.aud ?? 'undefined');
+          throw new Error(`Invalid audience: ${audValue}`);
         }
       }
 
@@ -118,7 +135,7 @@ function defaultExtractToken(req: Request): string | undefined {
 /**
  * Default authentication failure handler
  */
-function defaultAuthFailureHandler(error: Error, req: Request, res: Response, next: NextFunction): void {
+function defaultAuthFailureHandler(error: Error, req: Request, res: Response, _next: NextFunction): void {
   console.error('JWT Authentication failed:', error.message);
   res.status(401).json({
     error: 'Unauthorized',

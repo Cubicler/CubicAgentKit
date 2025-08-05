@@ -1,11 +1,14 @@
 # CubicAgentKit - AI Development Context
 
 ## Project Overview
+
 **npm library** for creating AI agents for Cubicler 2.0. TypeScript with composition architecture, dependency injection, and memory system.
+
 - **Version**: 2.3.0, **Build**: tsup, **Test**: Vitest
 - **Architecture**: Composition over inheritance, interface-based design, error transparency
 
 ## Core Structure
+
 ```
 src/
   core/cubic-agent.ts              # Main orchestrator with memory
@@ -19,6 +22,7 @@ src/
 ## Key Components
 
 ### CubicAgent
+
 ```typescript
 class CubicAgent {
   constructor(client: AgentClient, server: AgentServer, memory?: MemoryRepository)
@@ -34,11 +38,13 @@ interface CallContext {
 ```
 
 ### Communication Modes
+
 - **HTTP**: `AxiosAgentClient` + `ExpressAgentServer` (web deployments)
 - **Stdio**: `StdioAgentClient` + `StdioAgentServer` (CLI/local dev)
 - Both use MCP JSON-RPC 2.0 protocol
 
 ### Memory System
+
 ```typescript
 // Factory functions
 createDefaultMemoryRepository(maxTokens?, defaultImportance?) // In-memory SQLite
@@ -57,6 +63,7 @@ interface MemoryRepository {
 ## Quick Usage
 
 ### HTTP Mode
+
 ```typescript
 import { CubicAgent, AxiosAgentClient, ExpressAgentServer, createDefaultMemoryRepository } from 'cubicagentkit';
 
@@ -73,6 +80,7 @@ await agent.start(async (request, client, context) => {
 ```
 
 ### Stdio Mode
+
 ```typescript
 import { CubicAgent, StdioAgentClient, StdioAgentServer, createSQLiteMemoryRepository } from 'cubicagentkit';
 
@@ -83,12 +91,14 @@ const agent = new CubicAgent(client, server, memory);
 ```
 
 ## Development
+
 - **Scripts**: `npm run build`, `npm test`, `npm run test:run`, `npm run lint`
 - **TypeScript**: ES2023, ESNext modules, strict mode
 - **Testing**: Vitest with mocks via `vi.fn()`, dependency injection for testability
 - **Architecture**: Follow composition pattern, create interfaces, comprehensive tests, update `src/index.ts` exports
 
 ## Common Commands
+
 ```bash
 npm test -- stdio           # Test specific files
 npm run build              # Build and check types

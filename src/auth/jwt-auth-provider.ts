@@ -13,8 +13,8 @@ import {
 export class StaticJWTAuthProvider implements JWTAuthProvider {
   constructor(private readonly config: StaticJWTAuth) {}
 
-  async getToken(): Promise<string> {
-    return this.config.token;
+  getToken(): Promise<string> {
+    return Promise.resolve(this.config.token);
   }
 
   isTokenValid(): boolean {
@@ -23,9 +23,9 @@ export class StaticJWTAuthProvider implements JWTAuthProvider {
     return true;
   }
 
-  async refreshToken(): Promise<void> {
+  refreshToken(): Promise<void> {
     // Static tokens cannot be refreshed
-    throw new Error('Static JWT tokens cannot be refreshed');
+    return Promise.reject(new Error('Static JWT tokens cannot be refreshed'));
   }
 }
 
@@ -34,7 +34,7 @@ export class StaticJWTAuthProvider implements JWTAuthProvider {
  */
 export class OAuthJWTAuthProvider implements JWTAuthProvider {
   private readonly httpClient: AxiosInstance;
-  private tokenData: OAuthJWTAuth;
+  private readonly tokenData: OAuthJWTAuth;
 
   constructor(config: OAuthJWTAuth) {
     this.tokenData = { ...config };
@@ -108,7 +108,14 @@ export class OAuthJWTAuthProvider implements JWTAuthProvider {
       this.updateTokenData(tokenResponse);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(`OAuth token acquisition failed: ${error.response?.data?.error_description || error.message}`);
+        const responseData: unknown = error.response?.data;
+        const errorDescription = responseData && 
+          typeof responseData === 'object' && 
+          responseData !== null && 
+          'error_description' in responseData 
+          ? String((responseData as Record<string, unknown>).error_description) 
+          : error.message;
+        throw new Error(`OAuth token acquisition failed: ${errorDescription}`);
       }
       throw error;
     }
@@ -165,7 +172,9 @@ export function createJWTAuthProvider(config: JWTAuthConfig): JWTAuthProvider {
       return new StaticJWTAuthProvider(config);
     case 'oauth':
       return new OAuthJWTAuthProvider(config);
-    default:
-      throw new Error(`Unsupported JWT auth type: ${(config as any).type}`);
+    default: {
+      const exhaustiveCheck: never = config;
+      throw new Error(`Unsupported JWT auth type: ${String(exhaustiveCheck)}`);
+    }
   }
 }

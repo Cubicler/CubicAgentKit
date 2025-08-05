@@ -9,7 +9,7 @@ import { StaticJWTAuth, OAuthJWTAuth } from '../../src/interface/jwt-auth.js';
 
 // Mock axios
 vi.mock('axios');
-const mockedAxios = vi.mocked(axios);
+const mockedAxios = vi.mocked(axios, true);
 
 describe('StaticJWTAuthProvider', () => {
   const config: StaticJWTAuth = {
@@ -51,9 +51,22 @@ describe('OAuthJWTAuthProvider', () => {
 
   beforeEach(() => {
     mockAxiosInstance = {
-      post: vi.fn()
-    };
-    mockedAxios.create.mockReturnValue(mockAxiosInstance);
+      post: vi.fn(),
+      get: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      patch: vi.fn(),
+      head: vi.fn(),
+      options: vi.fn(),
+      request: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn(), eject: vi.fn() },
+        response: { use: vi.fn(), eject: vi.fn() }
+      },
+      defaults: {},
+      getUri: vi.fn()
+    } as any;
+    (mockedAxios.create as any).mockReturnValue(mockAxiosInstance);
     
     provider = new OAuthJWTAuthProvider(config);
   });

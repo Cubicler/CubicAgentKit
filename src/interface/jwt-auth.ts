@@ -2,6 +2,8 @@
  * JWT authentication configuration and interfaces
  */
 
+import { Request, Response, NextFunction } from 'express';
+
 /**
  * Static JWT authentication configuration
  */
@@ -81,6 +83,6 @@ export interface JWTVerificationOptions {
  */
 export interface JWTMiddlewareConfig {
   verification: JWTVerificationOptions;
-  extractToken?: (req: any) => string | undefined;
-  onAuthFailure?: (error: Error, req: any, res: any, next: any) => void;
+  extractToken?: (req: Request) => string | undefined;
+  onAuthFailure?: (error: Error, req: Request, res: Response, next: NextFunction) => void;
 }

@@ -1,4 +1,4 @@
-import express, { Express, Request, Response, RequestHandler as ExpressRequestHandler } from 'express';
+import express, { Express, Response, RequestHandler as ExpressRequestHandler } from 'express';
 import { Server } from 'http';
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent-request.js';

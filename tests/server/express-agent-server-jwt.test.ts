@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ExpressAgentServer } from '../../src/server/express-agent-server.js';
 import { JWTMiddlewareConfig } from '../../src/interface/jwt-auth.js';
 import { AgentRequest } from '../../src/model/agent-request.js';
+import { Server } from 'http';
 
 // Mock express module
 vi.mock('express', () => {
@@ -23,7 +24,7 @@ vi.mock('express', () => {
 });
 
 describe('ExpressAgentServer with JWT Authentication', () => {
-  let mockServer: any;
+  let mockServer: Pick<Server, 'close'>;
   let mockApp: any;
 
   beforeEach(async () => {
@@ -103,7 +104,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
       const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
       const handler = vi.fn();
 
-      mockApp.listen.mockImplementation((port: number, callback: Function) => {
+      mockApp.listen.mockImplementation((port: number, callback: () => void) => {
         callback();
         return mockServer;
       });
@@ -132,7 +133,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
 
       const handler = vi.fn();
 
-      mockApp.listen.mockImplementation((port: number, callback: Function) => {
+      mockApp.listen.mockImplementation((port: number, callback: () => void) => {
         callback();
         return mockServer;
       });
@@ -151,7 +152,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
       const server = new ExpressAgentServer(3000, '/agent');
       const handler = vi.fn();
 
-      mockApp.listen.mockImplementation((port: number, callback: Function) => {
+      mockApp.listen.mockImplementation((port: number, callback: () => void) => {
         callback();
         return mockServer;
       });
@@ -181,7 +182,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         usedToken: 10
       });
 
-      mockApp.listen.mockImplementation((port: number, callback: Function) => {
+      mockApp.listen.mockImplementation((port: number, callback: () => void) => {
         callback();
         return mockServer;
       });
@@ -238,7 +239,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
       const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
       const handler = vi.fn();
 
-      mockApp.listen.mockImplementation((port: number, callback: Function) => {
+      mockApp.listen.mockImplementation((port: number, callback: () => void) => {
         callback();
         return mockServer;
       });

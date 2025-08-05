@@ -5,7 +5,7 @@ import { StaticJWTAuth, OAuthJWTAuth } from '../../src/interface/jwt-auth.js';
 
 // Mock axios
 vi.mock('axios');
-const mockedAxios = vi.mocked(axios);
+const mockedAxios = vi.mocked(axios, true);
 
 describe('AxiosAgentClient with JWT Authentication', () => {
   let mockAxiosInstance: any;
@@ -21,8 +21,8 @@ describe('AxiosAgentClient with JWT Authentication', () => {
           use: vi.fn()
         }
       }
-    };
-    mockedAxios.create.mockReturnValue(mockAxiosInstance);
+    } as any;
+    (mockedAxios.create as any).mockReturnValue(mockAxiosInstance);
     vi.clearAllMocks();
   });
 
@@ -115,9 +115,9 @@ describe('AxiosAgentClient with JWT Authentication', () => {
 
       const mockOAuthInstance = {
         post: vi.fn().mockResolvedValue({ data: tokenResponse })
-      };
+      } as any;
 
-      mockedAxios.create
+      (mockedAxios.create as any)
         .mockReturnValueOnce(mockAxiosInstance) // For the main client
         .mockReturnValueOnce(mockOAuthInstance); // For the OAuth provider
 
@@ -187,7 +187,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
 
       const error = {
         response: { status: 401 },
-        config: { headers: {} }
+        config: { headers: {} as any }
       };
 
       // Mock the auth provider refresh method
@@ -227,7 +227,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
 
       const error = {
         response: { status: 500 },
-        config: { headers: {} }
+        config: { headers: {} as any }
       };
 
       await expect(responseInterceptor(error)).rejects.toBe(error);
@@ -245,7 +245,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
 
       const error = {
         response: { status: 401 },
-        config: { headers: {}, _retry: true }
+        config: { headers: {} as any, _retry: true }
       };
 
       await expect(responseInterceptor(error)).rejects.toBe(error);

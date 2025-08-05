@@ -71,12 +71,14 @@ export class AxiosAgentClient implements AgentClient {
    * @private
    */
   private setupJWTInterceptor(): void {
-    if (!this.jwtAuthProvider) return;
+    if (!this.jwtAuthProvider) {return;}
 
     this.httpClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
       try {
-        const token = await this.jwtAuthProvider!.getToken();
-        config.headers.Authorization = `Bearer ${token}`;
+        const token = await this.jwtAuthProvider?.getToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       } catch (error) {
         console.error('Failed to get JWT token:', error);
         throw new Error(`JWT authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -87,10 +89,20 @@ export class AxiosAgentClient implements AgentClient {
     // Set up response interceptor to handle token refresh on 401 errors
     this.httpClient.interceptors.response.use(
       (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
+      async (error: unknown) => {
+        interface RetryableRequest extends InternalAxiosRequestConfig {
+          _retry?: boolean;
+        }
         
-        if (error.response?.status === 401 && !originalRequest._retry && this.jwtAuthProvider) {
+        // Type guard to check if error has the expected structure
+        if (!error || typeof error !== 'object' || !('config' in error)) {
+          return Promise.reject(new Error('Unknown error occurred during request'));
+        }
+        
+        const originalRequest = (error as { config: InternalAxiosRequestConfig }).config as RetryableRequest;
+        const errorResponse = 'response' in error ? (error as { response?: { status?: number } }).response : undefined;
+        
+        if (errorResponse?.status === 401 && !originalRequest._retry && this.jwtAuthProvider) {
           originalRequest._retry = true;
           
           try {
@@ -100,10 +112,11 @@ export class AxiosAgentClient implements AgentClient {
             return this.httpClient(originalRequest);
           } catch (refreshError) {
             console.error('Failed to refresh JWT token:', refreshError);
-            throw error;
+            return Promise.reject(new Error(`JWT refresh failed: ${refreshError instanceof Error ? refreshError.message : 'Unknown error'}`));
           }
         }
         
+        // For non-401 errors or already retried requests, reject with the original error
         return Promise.reject(error);
       }
     );
