@@ -1,6 +1,6 @@
 {
   "name": "@cubicler/cubicagentkit",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Node.js library for creating AI agents that integrate with Cubicler",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
