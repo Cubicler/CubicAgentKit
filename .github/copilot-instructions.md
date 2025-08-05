@@ -138,6 +138,7 @@ Follow these steps for each interaction:
         - Decisions, updates, and changes
 
 4. Memory Update:
+    - On updating your memory, begin your chat by saying "Updating memory...".
    - If any new information was gathered during the interaction, update your memory as follows:
      - Create entities for recurring organizations, people, and significant events
      - Connect them to the current entities using relations

@@ -47,3 +47,29 @@ export type {
 // Middleware types
 export type { RequestMiddleware } from './client/axios-agent-client.js';
 export type { ExpressMiddleware } from './server/express-agent-server.js';
+
+// JWT Authentication
+export {
+  StaticJWTAuthProvider,
+  OAuthJWTAuthProvider,
+  createJWTAuthProvider
+} from './auth/jwt-auth-provider.js';
+export {
+  createJWTMiddleware,
+  createOptionalJWTMiddleware
+} from './auth/jwt-middleware.js';
+
+// JWT Authentication types
+export type {
+  JWTAuthConfig,
+  StaticJWTAuth,
+  OAuthJWTAuth,
+  OAuthTokenResponse,
+  JWTAuthProvider,
+  JWTVerificationOptions,
+  JWTMiddlewareConfig
+} from './interface/jwt-auth.js';
+export type {
+  JWTPayload,
+  JWTRequest
+} from './auth/jwt-middleware.js';

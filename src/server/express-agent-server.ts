@@ -2,6 +2,8 @@ import express, { Express, Request, Response, RequestHandler as ExpressRequestHa
 import { Server } from 'http';
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent-request.js';
+import { JWTMiddlewareConfig } from '../interface/jwt-auth.js';
+import { createJWTMiddleware, createOptionalJWTMiddleware, JWTRequest } from '../auth/jwt-middleware.js';
 
 /**
  * Express middleware function type
@@ -15,20 +17,28 @@ export type ExpressMiddleware = ExpressRequestHandler;
 export class ExpressAgentServer implements AgentServer {
   private readonly app: Express;
   private server?: Server;
+  private jwtMiddleware?: ExpressRequestHandler;
 
   /**
    * Creates a new ExpressAgentServer instance
    * @param port - The port number to listen on
    * @param endpoint - The endpoint path to handle requests (default: '/agent')
+   * @param jwtConfig - Optional JWT authentication configuration
    */
   constructor(
     private readonly port: number,
-    private readonly endpoint: string = '/agent'
+    private readonly endpoint: string = '/agent',
+    jwtConfig?: JWTMiddlewareConfig
   ) {
     this.app = express();
     
     // Add JSON parsing middleware
     this.app.use(express.json());
+
+    // Set up JWT authentication if provided
+    if (jwtConfig) {
+      this.jwtMiddleware = createJWTMiddleware(jwtConfig);
+    }
   }
 
   /**
@@ -42,13 +52,32 @@ export class ExpressAgentServer implements AgentServer {
   }
 
   /**
+   * Configure JWT authentication for this server
+   * @param jwtConfig - JWT middleware configuration
+   * @param optional - If true, creates optional JWT middleware that doesn't fail without token
+   * @returns this instance for method chaining
+   */
+  useJWTAuth(jwtConfig: JWTMiddlewareConfig, optional: boolean = false): this {
+    this.jwtMiddleware = optional 
+      ? createOptionalJWTMiddleware(jwtConfig)
+      : createJWTMiddleware(jwtConfig);
+    return this;
+  }
+
+  /**
    * Start the HTTP server and register the request handler
    * @param handler - The function to handle incoming agent requests
    * @throws Error if server startup fails
    */
   async start(handler: RequestHandler): Promise<void> {
+    // Apply JWT middleware to the endpoint if configured
+    const middlewares: ExpressRequestHandler[] = [];
+    if (this.jwtMiddleware) {
+      middlewares.push(this.jwtMiddleware);
+    }
+
     // Register the POST endpoint for agent requests
-    this.app.post(this.endpoint, (req: Request, res: Response) => {
+    this.app.post(this.endpoint, ...middlewares, (req: JWTRequest, res: Response) => {
       void (async () => {
         try {
           // Basic validation of request structure

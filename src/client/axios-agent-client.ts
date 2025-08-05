@@ -2,6 +2,8 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
 import { MCPRequest, MCPResponse } from '../model/mcp.js';
+import { JWTAuthProvider, JWTAuthConfig } from '../interface/jwt-auth.js';
+import { createJWTAuthProvider } from '../auth/jwt-auth-provider.js';
 
 /**
  * Middleware function type for request modification
@@ -15,15 +17,18 @@ export type RequestMiddleware = (config: InternalAxiosRequestConfig) => Internal
 export class AxiosAgentClient implements AgentClient {
   private readonly httpClient: AxiosInstance;
   private requestId: number = 1;
+  private jwtAuthProvider?: JWTAuthProvider;
 
   /**
    * Creates a new AxiosAgentClient instance
    * @param url - The base URL of the Cubicler instance
    * @param timeout - Request timeout in milliseconds (default: 30000)
+   * @param jwtConfig - Optional JWT authentication configuration
    */
   constructor(
     private readonly url: string,
-    private readonly timeout: number = 30000
+    private readonly timeout: number = 30000,
+    jwtConfig?: JWTAuthConfig
   ) {
     this.httpClient = axios.create({
       baseURL: this.url,
@@ -32,6 +37,12 @@ export class AxiosAgentClient implements AgentClient {
         'Content-Type': 'application/json',
       },
     });
+
+    // Set up JWT authentication if provided
+    if (jwtConfig) {
+      this.jwtAuthProvider = createJWTAuthProvider(jwtConfig);
+      this.setupJWTInterceptor();
+    }
   }
 
   /**
@@ -42,6 +53,60 @@ export class AxiosAgentClient implements AgentClient {
   useMiddleware(middleware: RequestMiddleware): this {
     this.httpClient.interceptors.request.use(middleware);
     return this;
+  }
+
+  /**
+   * Configure JWT authentication for this client
+   * @param jwtConfig - JWT authentication configuration
+   * @returns this instance for method chaining
+   */
+  useJWTAuth(jwtConfig: JWTAuthConfig): this {
+    this.jwtAuthProvider = createJWTAuthProvider(jwtConfig);
+    this.setupJWTInterceptor();
+    return this;
+  }
+
+  /**
+   * Set up JWT authentication interceptor
+   * @private
+   */
+  private setupJWTInterceptor(): void {
+    if (!this.jwtAuthProvider) return;
+
+    this.httpClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+      try {
+        const token = await this.jwtAuthProvider!.getToken();
+        config.headers.Authorization = `Bearer ${token}`;
+      } catch (error) {
+        console.error('Failed to get JWT token:', error);
+        throw new Error(`JWT authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      return config;
+    });
+
+    // Set up response interceptor to handle token refresh on 401 errors
+    this.httpClient.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        
+        if (error.response?.status === 401 && !originalRequest._retry && this.jwtAuthProvider) {
+          originalRequest._retry = true;
+          
+          try {
+            await this.jwtAuthProvider.refreshToken();
+            const token = await this.jwtAuthProvider.getToken();
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return this.httpClient(originalRequest);
+          } catch (refreshError) {
+            console.error('Failed to refresh JWT token:', refreshError);
+            throw error;
+          }
+        }
+        
+        return Promise.reject(error);
+      }
+    );
   }
 
   /**

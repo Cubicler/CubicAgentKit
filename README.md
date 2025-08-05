@@ -12,6 +12,7 @@ A modern Node.js library for creating AI agents that integrate seamlessly with *
 - **🔌 Composition-Based**: Uses dependency injection for easy testing and flexibility
 - **📡 Built-in HTTP Client**: `AxiosAgentClient` with middleware support for Cubicler MCP communication
 - **🌐 Built-in HTTP Server**: `ExpressAgentServer` with middleware support for agent endpoints
+- **🔐 JWT Authentication**: Complete JWT support with static tokens and OAuth 2.0 flows
 - **🧠 Memory System**: SQLite-based persistent memory with LRU short-term caching
 - **📊 Tool Call Tracking**: Automatic tracking of tool usage per request
 - **🛡️ Type-Safe**: Full TypeScript support with strict typing
@@ -452,6 +453,355 @@ const customAgent = new CubicAgent(
   new CustomMQTTClient(),
   new CustomFastifyServer()
 );
+```
+
+## 🔐 JWT Authentication
+
+CubicAgentKit provides comprehensive JWT authentication support for both client and server components, supporting both static tokens and OAuth 2.0 flows.
+
+### Features
+
+- **Static JWT**: Simple token-based authentication
+- **OAuth 2.0**: Client credentials flow with automatic token refresh
+- **Automatic Token Management**: Token injection, validation, and refresh
+- **Flexible Configuration**: Multiple configuration options for different use cases
+- **TypeScript Support**: Full type safety with comprehensive interfaces
+
+### Quick Start - Static JWT
+
+```typescript
+import { 
+  AxiosAgentClient, 
+  ExpressAgentServer,
+  StaticJWTAuth,
+  JWTMiddlewareConfig 
+} from '@cubicler/cubicagentkit';
+
+// Client with static JWT
+const jwtConfig: StaticJWTAuth = {
+  type: 'static',
+  token: 'your-jwt-token-here'
+};
+
+const client = new AxiosAgentClient('http://localhost:1503', 30000, jwtConfig);
+
+// Server with JWT validation  
+const serverJWTConfig: JWTMiddlewareConfig = {
+  verification: {
+    secret: 'your-jwt-secret',
+    algorithms: ['HS256']
+  }
+};
+
+const server = new ExpressAgentServer(3000, '/agent', serverJWTConfig);
+```
+
+### OAuth 2.0 Authentication
+
+```typescript
+import { OAuthJWTAuth } from '@cubicler/cubicagentkit';
+
+// OAuth client configuration
+const oauthConfig: OAuthJWTAuth = {
+  type: 'oauth',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  tokenEndpoint: 'https://auth.example.com/oauth/token',
+  scope: 'cubicler:read cubicler:write',
+  grantType: 'client_credentials'
+};
+
+// Client will automatically:
+// 1. Acquire access token on first request
+// 2. Cache and reuse valid tokens  
+// 3. Refresh expired tokens automatically
+// 4. Retry failed requests with new tokens
+const client = new AxiosAgentClient('http://localhost:1503', 30000, oauthConfig);
+```
+
+### Client JWT Configuration
+
+#### Constructor Configuration
+
+```typescript
+// Static JWT in constructor
+const client = new AxiosAgentClient(
+  'http://localhost:1503', 
+  30000, 
+  { type: 'static', token: 'jwt-token' }
+);
+
+// OAuth JWT in constructor
+const client = new AxiosAgentClient(
+  'http://localhost:1503',
+  30000,
+  {
+    type: 'oauth',
+    clientId: 'client-id',
+    clientSecret: 'client-secret', 
+    tokenEndpoint: 'https://auth.example.com/token'
+  }
+);
+```
+
+#### Method Configuration
+
+```typescript
+// Configure after instantiation
+const client = new AxiosAgentClient('http://localhost:1503')
+  .useJWTAuth({
+    type: 'static',
+    token: 'jwt-token'
+  });
+
+// Chain with other middleware
+const client = new AxiosAgentClient('http://localhost:1503')
+  .useMiddleware((config) => {
+    config.headers['X-Custom'] = 'value';
+    return config;
+  })
+  .useJWTAuth(jwtConfig);
+```
+
+### Server JWT Configuration
+
+#### Required Authentication
+
+```typescript
+const jwtConfig: JWTMiddlewareConfig = {
+  verification: {
+    secret: 'your-secret-key',
+    algorithms: ['HS256', 'RS256'],
+    issuer: 'https://your-auth-server.com',
+    audience: 'your-api',
+    ignoreExpiration: false
+  }
+};
+
+// All requests must have valid JWT
+const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+```
+
+#### Optional Authentication
+
+```typescript
+// Allow requests with or without JWT
+const server = new ExpressAgentServer(3000, '/agent')
+  .useJWTAuth(jwtConfig, true); // true = optional
+```
+
+#### Custom Token Extraction
+
+```typescript
+const customJWTConfig: JWTMiddlewareConfig = {
+  verification: {
+    secret: 'your-secret',
+    algorithms: ['HS256']
+  },
+  extractToken: (req) => {
+    // Extract from custom header
+    const customHeader = req.headers['x-auth-token'] as string;
+    if (customHeader) return customHeader;
+    
+    // Extract from cookie
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/auth_token=([^;]+)/);
+      return match ? match[1] : undefined;
+    }
+    
+    return undefined;
+  },
+  onAuthFailure: (error, req, res, next) => {
+    res.status(401).json({
+      error: 'Authentication Required',
+      message: 'Please provide a valid authentication token'
+    });
+  }
+};
+
+const server = new ExpressAgentServer(3000, '/agent')
+  .useJWTAuth(customJWTConfig);
+```
+
+### Complete CubicAgent with JWT
+
+```typescript
+import { 
+  CubicAgent,
+  AxiosAgentClient,
+  ExpressAgentServer,
+  createDefaultMemoryRepository,
+  OAuthJWTAuth,
+  JWTMiddlewareConfig
+} from '@cubicler/cubicagentkit';
+
+async function createSecureAgent() {
+  // OAuth client for calling Cubicler
+  const clientAuth: OAuthJWTAuth = {
+    type: 'oauth',
+    clientId: 'cubicler-agent',
+    clientSecret: process.env.CLIENT_SECRET!,
+    tokenEndpoint: 'https://auth.example.com/token',
+    scope: 'cubicler:full'
+  };
+  
+  const client = new AxiosAgentClient('http://localhost:1503', 30000, clientAuth);
+  
+  // JWT validation for incoming requests
+  const serverAuth: JWTMiddlewareConfig = {
+    verification: {
+      secret: process.env.JWT_SECRET!,
+      algorithms: ['HS256'],
+      issuer: 'https://auth.example.com',
+      audience: 'my-agent-api'
+    }
+  };
+  
+  const server = new ExpressAgentServer(3000, '/agent', serverAuth);
+  const memory = await createDefaultMemoryRepository();
+  
+  const agent = new CubicAgent(client, server, memory);
+  
+  await agent.start(async (request, client, context) => {
+    // JWT payload available in Express context
+    console.log('Authenticated user:', (request as any).user?.sub);
+    
+    // Store authenticated interaction
+    await context.memory?.remember(
+      `Authenticated request from user ${(request as any).user?.sub}`,
+      0.7,
+      ['auth', 'interaction']
+    );
+    
+    // Make authenticated calls to Cubicler
+    const result = await client.callTool('someTool', { param: 'value' });
+    
+    return {
+      type: 'text',
+      content: `Securely processed: ${JSON.stringify(result)}`,
+      usedToken: 50
+    };
+  });
+  
+  console.log('🔐 Secure agent running with JWT authentication');
+}
+```
+
+### JWT Types Reference
+
+```typescript
+// Static JWT configuration
+interface StaticJWTAuth {
+  type: 'static';
+  token: string;
+}
+
+// OAuth JWT configuration  
+interface OAuthJWTAuth {
+  type: 'oauth';
+  clientId: string;
+  clientSecret: string;
+  tokenEndpoint: string;
+  scope?: string;
+  grantType?: 'client_credentials' | 'authorization_code';
+  refreshToken?: string;
+  accessToken?: string;
+  expiresAt?: number;
+}
+
+// Server JWT verification options
+interface JWTVerificationOptions {
+  secret?: string;
+  publicKey?: string;
+  algorithms?: string[];
+  issuer?: string;
+  audience?: string;
+  ignoreExpiration?: boolean;
+}
+
+// Server middleware configuration
+interface JWTMiddlewareConfig {
+  verification: JWTVerificationOptions;
+  extractToken?: (req: any) => string | undefined;
+  onAuthFailure?: (error: Error, req: any, res: any, next: any) => void;
+}
+
+// JWT payload available in Express requests
+interface JWTRequest extends Request {
+  jwt?: JWTPayload;  // Raw JWT payload
+  user?: any;        // Convenience alias for jwt
+}
+```
+
+### Error Handling
+
+JWT authentication provides comprehensive error handling:
+
+```typescript
+// Client-side errors
+try {
+  await client.initialize();
+} catch (error) {
+  if (error.message.includes('JWT authentication failed')) {
+    console.error('Token acquisition failed:', error);
+    // Handle authentication failure
+  }
+}
+
+// Server-side errors (custom handler)
+const jwtConfig: JWTMiddlewareConfig = {
+  verification: { secret: 'secret' },
+  onAuthFailure: (error, req, res, next) => {
+    console.error('JWT validation failed:', error.message);
+    
+    if (error.message.includes('expired')) {
+      res.status(401).json({ error: 'Token expired' });
+    } else if (error.message.includes('Invalid issuer')) {
+      res.status(401).json({ error: 'Invalid token issuer' });
+    } else {
+      res.status(401).json({ error: 'Authentication failed' });
+    }
+  }
+};
+```
+
+### Production Considerations
+
+1. **Secret Management**: Use environment variables for secrets
+
+```typescript
+const jwtConfig: JWTMiddlewareConfig = {
+  verification: {
+    secret: process.env.JWT_SECRET,
+    algorithms: ['HS256'],
+    issuer: process.env.JWT_ISSUER
+  }
+};
+```
+
+2. **Token Refresh**: OAuth tokens are automatically refreshed
+
+```typescript
+// OAuth provider handles refresh automatically
+const oauthConfig: OAuthJWTAuth = {
+  type: 'oauth',
+  clientId: process.env.OAUTH_CLIENT_ID!,
+  clientSecret: process.env.OAUTH_CLIENT_SECRET!,
+  tokenEndpoint: process.env.OAUTH_TOKEN_ENDPOINT!
+};
+```
+
+3. **HTTPS in Production**: Always use HTTPS for JWT transmission
+
+```typescript
+// Ensure HTTPS middleware in production
+server.useMiddleware((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && !req.secure) {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
 ```
 
 ## 📊 Type Definitions
