@@ -51,8 +51,10 @@
   },
   "dependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/eventsource": "^1.1.15",
     "axios": "^1.11.0",
     "better-sqlite3": "^12.2.0",
+    "eventsource": "^4.0.0",
     "express": "^5.1.0"
   },
   "devDependencies": {

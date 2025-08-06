@@ -14,7 +14,7 @@ export type ExpressMiddleware = ExpressRequestHandler;
  * Express-based implementation of AgentServer
  * Handles HTTP server lifecycle and request routing using Express.js
  */
-export class ExpressAgentServer implements AgentServer {
+export class HttpAgentServer implements AgentServer {
   private readonly app: Express;
   private server?: Server;
   private jwtMiddleware?: ExpressRequestHandler;

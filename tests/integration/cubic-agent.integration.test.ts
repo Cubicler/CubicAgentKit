@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { CubicAgent } from '../../src/core/cubic-agent.js';
-import { AxiosAgentClient } from '../../src/client/axios-agent-client.js';
-import { ExpressAgentServer } from '../../src/server/express-agent-server.js';
+import { HttpAgentClient } from '../../src/client/http-agent-client.js';
+import { HttpAgentServer } from '../../src/server/http-agent-server.js';
 import { AgentRequest } from '../../src/model/agent-request.js';
 import { RawAgentResponse } from '../../src/model/agent-response.js';
 import { AgentClient } from '../../src/interface/agent-client.js';
@@ -14,12 +14,12 @@ describe('CubicAgent Integration Tests', () => {
   describe('Agent Lifecycle', () => {
     const agentPort = 3021; // Use port 3021 for the lifecycle test
     let cubicAgent: CubicAgent;
-    let client: AxiosAgentClient;
-    let server: ExpressAgentServer;
+    let client: HttpAgentClient;
+    let server: HttpAgentServer;
 
     beforeAll(async () => {
-      client = new AxiosAgentClient(cubiclerUrl);
-      server = new ExpressAgentServer(agentPort, '/agent');
+      client = new HttpAgentClient(cubiclerUrl);
+      server = new HttpAgentServer(agentPort, '/agent');
       cubicAgent = new CubicAgent(client, server);
     });
 
@@ -48,12 +48,12 @@ describe('CubicAgent Integration Tests', () => {
   describe('Request Handling', () => {
     const agentPort = 3022; // Use port 3022 for the request handling tests
     let cubicAgent: CubicAgent;
-    let client: AxiosAgentClient;
-    let server: ExpressAgentServer;
+    let client: HttpAgentClient;
+    let server: HttpAgentServer;
 
     beforeAll(async () => {
-      client = new AxiosAgentClient(cubiclerUrl);
-      server = new ExpressAgentServer(agentPort, '/agent');
+      client = new HttpAgentClient(cubiclerUrl);
+      server = new HttpAgentServer(agentPort, '/agent');
       cubicAgent = new CubicAgent(client, server);
 
       const handler = async (request: AgentRequest, client: AgentClient, context: CallContext): Promise<RawAgentResponse> => {

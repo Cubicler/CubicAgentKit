@@ -11,16 +11,16 @@ import { createJWTAuthProvider } from '../auth/jwt-auth-provider.js';
 export type RequestMiddleware = (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>;
 
 /**
- * Axios-based implementation of AgentClient for Cubicler MCP communication
+ * HTTP-based implementation of AgentClient for Cubicler MCP communication
  * Handles HTTP communication with Cubicler's MCP endpoint using JSON-RPC 2.0 protocol
  */
-export class AxiosAgentClient implements AgentClient {
+export class HttpAgentClient implements AgentClient {
   private readonly httpClient: AxiosInstance;
   private requestId: number = 1;
   private jwtAuthProvider?: JWTAuthProvider;
 
   /**
-   * Creates a new AxiosAgentClient instance
+   * Creates a new HttpAgentClient instance
    * @param url - The base URL of the Cubicler instance
    * @param timeout - Request timeout in milliseconds (default: 30000)
    * @param jwtConfig - Optional JWT authentication configuration

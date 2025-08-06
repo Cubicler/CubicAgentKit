@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { AxiosAgentClient } from '../../src/client/axios-agent-client.js';
+import { HttpAgentClient } from '../../src/client/http-agent-client.js';
 
-describe('AxiosAgentClient Integration Tests', () => {
+describe('HttpAgentClient Integration Tests', () => {
   const cubiclerUrl = process.env.CUBICLER_URL || 'http://localhost:1504';
-  let client: AxiosAgentClient;
+  let client: HttpAgentClient;
 
   beforeAll(async () => {
-    client = new AxiosAgentClient(cubiclerUrl);
+    client = new HttpAgentClient(cubiclerUrl);
   });
 
   describe('Client Initialization', () => {
@@ -15,7 +15,7 @@ describe('AxiosAgentClient Integration Tests', () => {
     });
 
     it('should handle initialization with invalid URL', async () => {
-      const invalidClient = new AxiosAgentClient('http://invalid-url:9999');
+      const invalidClient = new HttpAgentClient('http://invalid-url:9999');
       await expect(invalidClient.initialize()).rejects.toThrow(/Failed to initialize connection/);
     });
   });
@@ -89,7 +89,7 @@ describe('AxiosAgentClient Integration Tests', () => {
 
   describe('Client Middleware', () => {
     it('should support request middleware', async () => {
-      const testClient = new AxiosAgentClient(cubiclerUrl);
+      const testClient = new HttpAgentClient(cubiclerUrl);
       
       // Add middleware to add a custom header
       testClient.useMiddleware((config) => {
@@ -111,7 +111,7 @@ describe('AxiosAgentClient Integration Tests', () => {
     });
 
     it('should handle network timeouts gracefully', async () => {
-      const timeoutClient = new AxiosAgentClient(cubiclerUrl, 1); // 1ms timeout
+      const timeoutClient = new HttpAgentClient(cubiclerUrl, 1); // 1ms timeout
       
       await expect(
         timeoutClient.initialize()

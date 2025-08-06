@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
-import { AxiosAgentClient } from '../../src/client/axios-agent-client.js';
+import { HttpAgentClient } from '../../src/client/http-agent-client.js';
 import { StaticJWTAuth, OAuthJWTAuth } from '../../src/interface/jwt-auth.js';
 
 // Mock axios
 vi.mock('axios');
 const mockedAxios = vi.mocked(axios, true);
 
-describe('AxiosAgentClient with JWT Authentication', () => {
+describe('HttpAgentClient with JWT Authentication', () => {
   let mockAxiosInstance: any;
 
   beforeEach(() => {
@@ -37,7 +37,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-static-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Verify axios instance was created
       // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -56,7 +56,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
     });
 
     it('should add JWT configuration via useJWTAuth method', () => {
-      const client = new AxiosAgentClient('http://localhost:3000');
+      const client = new HttpAgentClient('http://localhost:3000');
       
       const jwtConfig: StaticJWTAuth = {
         type: 'static',
@@ -76,7 +76,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-static-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Get the request interceptor function
       const requestInterceptor = mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
@@ -100,7 +100,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         scope: 'read write'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       const axiosCreateSpy = mockedAxios.create as any;
@@ -132,7 +132,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         tokenEndpoint: 'https://auth.example.com/token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Get the request interceptor function
       const requestInterceptor = mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
@@ -158,7 +158,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Mock the auth provider to throw an error
       const requestInterceptor = mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
@@ -184,7 +184,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       // Get the response interceptor function
       const responseInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
@@ -225,7 +225,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       const responseInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
 
@@ -243,7 +243,7 @@ describe('AxiosAgentClient with JWT Authentication', () => {
         token: 'test-token'
       };
 
-      const client = new AxiosAgentClient('http://localhost:3000', 30000, jwtConfig);
+      const client = new HttpAgentClient('http://localhost:3000', 30000, jwtConfig);
 
       const responseInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
 

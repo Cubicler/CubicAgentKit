@@ -23,7 +23,8 @@
   },
   "include": [
     "src/**/*",
-    "tests/**/*"
+    "tests/**/*",
+    "examples/**/*"
   ],
   "exclude": [
     "node_modules",

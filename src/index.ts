@@ -1,7 +1,8 @@
 // Core classes
 export { CubicAgent } from './core/cubic-agent.js';
-export { AxiosAgentClient } from './client/axios-agent-client.js';
-export { ExpressAgentServer } from './server/express-agent-server.js';
+export { HttpAgentClient } from './client/http-agent-client.js';
+export { HttpAgentServer } from './server/http-agent-server.js';
+export { SSEAgentServer } from './server/sse-agent-server.js';
 export { StdioAgentClient } from './client/stdio-agent-client.js';
 export { StdioAgentServer } from './server/stdio-agent-server.js';
 
@@ -45,8 +46,8 @@ export type {
 } from './model/memory.js';
 
 // Middleware types
-export type { RequestMiddleware } from './client/axios-agent-client.js';
-export type { ExpressMiddleware } from './server/express-agent-server.js';
+export type { RequestMiddleware } from './client/http-agent-client.js';
+export type { ExpressMiddleware } from './server/http-agent-server.js';
 
 // JWT Authentication
 export {

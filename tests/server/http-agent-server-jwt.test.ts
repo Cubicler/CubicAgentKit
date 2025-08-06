@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ExpressAgentServer } from '../../src/server/express-agent-server.js';
+import { HttpAgentServer } from '../../src/server/http-agent-server.js';
 import { JWTMiddlewareConfig } from '../../src/interface/jwt-auth.js';
 import { AgentRequest } from '../../src/model/agent-request.js';
 import { Server } from 'http';
@@ -23,7 +23,7 @@ vi.mock('express', () => {
   };
 });
 
-describe('ExpressAgentServer with JWT Authentication', () => {
+describe('HttpAgentServer with JWT Authentication', () => {
   let mockServer: Pick<Server, 'close'>;
   let mockApp: any;
 
@@ -48,13 +48,13 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         }
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
 
       expect(mockApp.use).toHaveBeenCalledWith(expect.any(Function)); // JSON middleware
     });
 
     it('should create server without JWT configuration', () => {
-      const server = new ExpressAgentServer(3000, '/agent');
+      const server = new HttpAgentServer(3000, '/agent');
 
       expect(mockApp.use).toHaveBeenCalledWith(expect.any(Function)); // JSON middleware
     });
@@ -62,7 +62,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
 
   describe('useJWTAuth method', () => {
     it('should configure JWT authentication', () => {
-      const server = new ExpressAgentServer(3000, '/agent');
+      const server = new HttpAgentServer(3000, '/agent');
       
       const jwtConfig: JWTMiddlewareConfig = {
         verification: {
@@ -77,7 +77,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
     });
 
     it('should configure optional JWT authentication', () => {
-      const server = new ExpressAgentServer(3000, '/agent');
+      const server = new HttpAgentServer(3000, '/agent');
       
       const jwtConfig: JWTMiddlewareConfig = {
         verification: {
@@ -101,7 +101,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         }
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
       const handler = vi.fn();
 
       mockApp.listen.mockImplementation((port: number, callback: () => void) => {
@@ -120,7 +120,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
     });
 
     it('should apply JWT middleware when configured via useJWTAuth', async () => {
-      const server = new ExpressAgentServer(3000, '/agent');
+      const server = new HttpAgentServer(3000, '/agent');
       
       const jwtConfig: JWTMiddlewareConfig = {
         verification: {
@@ -149,7 +149,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
     });
 
     it('should not apply JWT middleware when not configured', async () => {
-      const server = new ExpressAgentServer(3000, '/agent');
+      const server = new HttpAgentServer(3000, '/agent');
       const handler = vi.fn();
 
       mockApp.listen.mockImplementation((port: number, callback: () => void) => {
@@ -175,7 +175,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         }
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
       const handler = vi.fn().mockResolvedValue({
         type: 'text',
         content: 'Test response',
@@ -236,7 +236,7 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         }
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
       const handler = vi.fn();
 
       mockApp.listen.mockImplementation((port: number, callback: () => void) => {
@@ -281,11 +281,11 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         extractToken: customExtractToken
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
 
       // The middleware creation is internal, so we can't directly test the custom function
       // but we can verify the server was created successfully with the config
-      expect(server).toBeInstanceOf(ExpressAgentServer);
+      expect(server).toBeInstanceOf(HttpAgentServer);
     });
 
     it('should use custom auth failure handler', () => {
@@ -297,9 +297,9 @@ describe('ExpressAgentServer with JWT Authentication', () => {
         onAuthFailure: customFailureHandler
       };
 
-      const server = new ExpressAgentServer(3000, '/agent', jwtConfig);
+      const server = new HttpAgentServer(3000, '/agent', jwtConfig);
 
-      expect(server).toBeInstanceOf(ExpressAgentServer);
+      expect(server).toBeInstanceOf(HttpAgentServer);
     });
   });
 });
