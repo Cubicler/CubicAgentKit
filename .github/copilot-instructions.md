@@ -124,21 +124,20 @@ Follow these steps for each interaction:
 2. Memory Retrieval:
    - Always begin your chat by saying only "Recalling..." and retrieve all relevant information from your knowledge graph
    - Always refer to your knowledge graph as your "memory"
+   - Always do the "Recalling..." step if you are not sure about what to do next that might be stored in your memory
 
 3. Memory
    - While conversing with the user, be attentive to any new information that falls into these categories:
      - Basic Identity (age, gender, location, job title, education level, etc.)
      - Behaviors (interests, habits, etc.)
      - Preferences (communication style, preferred language, etc.)
-     - Goals (goals, targets, aspirations, etc.)
-     - Relationships (personal and professional relationships up to 3 degrees of separation)
      - Project (important!):
         - Current project details (name, description, status, etc.)
         - Architecture, design, and implementation details
         - Decisions, updates, and changes
 
 4. Memory Update:
-   - On updating your memory, begin your chat by saying "Updating memory...".
+    - On updating your memory, begin your chat by saying "Updating memory...".
    - If any new information was gathered during the interaction, update your memory as follows:
      - Create entities for recurring organizations, people, and significant events
      - Connect them to the current entities using relations
