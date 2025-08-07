@@ -24,8 +24,16 @@ export interface MessageSender {
 export interface Message {
   sender: MessageSender;
   timestamp?: string; // ISO 8601, optional
-  type: 'text' | 'null'; // text (image/video support planned), null for no content
-  content: string | null;
+  type: 'text' | 'image' | 'url' | 'null'; // text/image, null for no content
+  content: string | null; // text content or image base64
+  metadata?: MessageMetadata;
+}
+
+export interface MessageMetadata {
+  fileName?: string; // optional file name for images
+  fileSize?: number; // optional file size in bytes
+  fileExtension?: string; // optional file extension
+  format: 'base64' | 'url'; // base64 encoded or URL reference
 }
 
 /**

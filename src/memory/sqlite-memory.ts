@@ -1,7 +1,6 @@
 import { AgentMemory, MemorySearchOptions } from '../interface/memory-repository.js';
 import { PersistentMemory } from '../interface/persistent-memory.js';
 import { MemoryItem } from '../model/memory.js';
-import { matchesSearchCriteria } from '../utils/memory-utils.js';
 import Database from 'better-sqlite3';
 
 // SQLite row interfaces for type safety
@@ -9,8 +8,12 @@ interface MemoryRow {
   id: string;
   sentence: string;
   importance: number;
-  tags: string;
   timestamp: number;
+}
+
+interface TagRow {
+  id: number;
+  tag: string;
 }
 
 interface CountRow {
@@ -41,15 +44,46 @@ export class SQLiteMemory implements PersistentMemory {
   async initialize(): Promise<void> {
     this.db = new Database(this.dbPath);
     
-    // Create memories table
+    // Enable foreign key constraints
+    this.db.exec('PRAGMA foreign_keys = ON');
+    
+    // Add custom REGEXP function for regex support
+    this.db.function('regexp', { deterministic: true }, (pattern: string, text: string) => {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        return regex.test(text) ? 1 : 0; // SQLite needs 1/0 instead of true/false
+      } catch {
+        return 0; // Invalid regex returns false (0)
+      }
+    });
+    
+    // Create memories table (without tags column)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         sentence TEXT NOT NULL,
         importance REAL NOT NULL,
-        tags TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create tags table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag TEXT UNIQUE NOT NULL
+      )
+    `);
+
+    // Create memory_tags junction table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS memory_tags (
+        memory_id TEXT NOT NULL,
+        tag_id INTEGER NOT NULL,
+        PRIMARY KEY (memory_id, tag_id),
+        FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
       )
     `);
 
@@ -62,6 +96,74 @@ export class SQLiteMemory implements PersistentMemory {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance)
     `);
+
+    // Create index on tag for faster tag searches
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag)
+    `);
+  }
+
+  /**
+   * Get or create tag ID for a given tag string
+   */
+  private getOrCreateTagId(tagText: string): number {
+    if (!this.db) {
+      throw new Error('SQLiteMemory not initialized. Call initialize() first.');
+    }
+
+    // Try to get existing tag
+    const selectStmt = this.db.prepare('SELECT id FROM tags WHERE tag = ?');
+    const existingTag = selectStmt.get(tagText) as TagRow | undefined;
+    
+    if (existingTag) {
+      return existingTag.id;
+    }
+
+    // Create new tag
+    const insertStmt = this.db.prepare('INSERT INTO tags (tag) VALUES (?)');
+    const result = insertStmt.run(tagText);
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Get tags for a memory by memory ID
+   */
+  private getTagsForMemory(memoryId: string): string[] {
+    if (!this.db) {
+      throw new Error('SQLiteMemory not initialized. Call initialize() first.');
+    }
+
+    const stmt = this.db.prepare(`
+      SELECT t.tag 
+      FROM tags t
+      JOIN memory_tags mt ON t.id = mt.tag_id
+      WHERE mt.memory_id = ?
+      ORDER BY t.tag
+    `);
+    
+    const rows = stmt.all(memoryId) as { tag: string }[];
+    return rows.map(row => row.tag);
+  }
+
+  /**
+   * Store tags for a memory
+   */
+  private storeTagsForMemory(memoryId: string, tags: string[]): void {
+    if (!this.db) {
+      throw new Error('SQLiteMemory not initialized. Call initialize() first.');
+    }
+
+    // First, remove existing tags for this memory
+    const deleteStmt = this.db.prepare('DELETE FROM memory_tags WHERE memory_id = ?');
+    deleteStmt.run(memoryId);
+
+    // Insert new tags
+    const insertStmt = this.db.prepare('INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)');
+    
+    for (const tag of tags) {
+      const tagId = this.getOrCreateTagId(tag);
+      insertStmt.run(memoryId, tagId);
+    }
   }
 
   /**
@@ -73,18 +175,30 @@ export class SQLiteMemory implements PersistentMemory {
       throw new Error('SQLiteMemory not initialized. Call initialize() first.');
     }
 
-    const stmt = this.db.prepare(`
-      INSERT INTO memories (id, sentence, importance, tags, timestamp)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    // Begin transaction
+    const transaction = this.db.transaction(() => {
+      // Insert memory without tags
+      const memoryStmt = this.db?.prepare(`
+        INSERT INTO memories (id, sentence, importance, timestamp)
+        VALUES (?, ?, ?, ?)
+      `);
 
-    stmt.run(
-      memory.id,
-      memory.sentence,
-      memory.importance,
-      JSON.stringify(memory.tags),
-      memory.timestamp
-    );
+      if (!memoryStmt) {
+        throw new Error('Failed to prepare memory statement');
+      }
+
+      memoryStmt.run(
+        memory.id,
+        memory.sentence,
+        memory.importance,
+        memory.timestamp
+      );
+
+      // Store tags
+      this.storeTagsForMemory(memory.id, memory.tags);
+    });
+
+    transaction();
   }
 
   /**
@@ -97,7 +211,7 @@ export class SQLiteMemory implements PersistentMemory {
     }
 
     const stmt = this.db.prepare(`
-      SELECT id, sentence, importance, tags, timestamp
+      SELECT id, sentence, importance, timestamp
       FROM memories
       WHERE id = ?
     `);
@@ -107,11 +221,14 @@ export class SQLiteMemory implements PersistentMemory {
       return null;
     }
 
+    // Get tags for this memory
+    const tags = this.getTagsForMemory(row.id);
+
     return new AgentMemory(
       row.id,
       row.sentence,
       row.importance,
-      JSON.parse(row.tags) as string[]
+      tags
     );
   }
 
@@ -124,20 +241,45 @@ export class SQLiteMemory implements PersistentMemory {
       throw new Error('SQLiteMemory not initialized. Call initialize() first.');
     }
 
-    let query = 'SELECT id, sentence, importance, tags, timestamp FROM memories WHERE 1=1';
+    let query = 'SELECT DISTINCT m.id, m.sentence, m.importance, m.timestamp FROM memories m';
     const params: (string | number)[] = [];
+    const whereClauses: string[] = [];
+
+    // Join with tags if any tag-related filters are specified
+    const needsTagJoin = (options.tags && options.tags.length > 0) || options.tagsRegex;
+    if (needsTagJoin) {
+      query += ' JOIN memory_tags mt ON m.id = mt.memory_id JOIN tags t ON mt.tag_id = t.id';
+      
+      // Handle exact tag matching
+      if (options.tags && options.tags.length > 0) {
+        const tagPlaceholders = options.tags.map(() => '?').join(',');
+        whereClauses.push(`t.tag IN (${tagPlaceholders})`);
+        params.push(...options.tags);
+      }
+      
+      // Handle tag regex matching with SQLite REGEXP function
+      if (options.tagsRegex) {
+        whereClauses.push(`t.tag REGEXP ?`);
+        params.push(options.tagsRegex);
+      }
+    }
 
     // Add content search if specified
     if (options.content) {
-      query += ' AND sentence LIKE ?';
+      whereClauses.push('m.sentence LIKE ?');
       params.push(`%${options.content}%`);
     }
 
     // Add content regex search if specified
     if (options.contentRegex) {
-      // SQLite doesn't have native regex, we'll filter in memory later
-      query += ' AND sentence LIKE ?';
-      params.push(`%${options.contentRegex}%`); // Basic LIKE for initial filtering
+      // Use native SQLite REGEXP function for better performance
+      whereClauses.push('m.sentence REGEXP ?');
+      params.push(options.contentRegex);
+    }
+
+    // Add WHERE clause if we have conditions
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     // Add sorting
@@ -145,12 +287,12 @@ export class SQLiteMemory implements PersistentMemory {
     const sortOrder = options.sortOrder ?? 'desc';
     
     if (sortBy === 'importance') {
-      query += ` ORDER BY importance ${sortOrder.toUpperCase()}`;
+      query += ` ORDER BY m.importance ${sortOrder.toUpperCase()}`;
     } else if (sortBy === 'timestamp') {
-      query += ` ORDER BY timestamp ${sortOrder.toUpperCase()}`;
+      query += ` ORDER BY m.timestamp ${sortOrder.toUpperCase()}`;
     } else if (sortBy === 'both') {
       // Sort by importance first, then timestamp
-      query += ` ORDER BY importance ${sortOrder.toUpperCase()}, timestamp ${sortOrder.toUpperCase()}`;
+      query += ` ORDER BY m.importance ${sortOrder.toUpperCase()}, m.timestamp ${sortOrder.toUpperCase()}`;
     }
 
     // Add limit
@@ -162,27 +304,20 @@ export class SQLiteMemory implements PersistentMemory {
     const stmt = this.db.prepare(query);
     const rows = stmt.all(...params) as MemoryRow[];
 
-    // Convert to AgentMemory objects and apply additional filtering
+    // Convert to AgentMemory objects
+    // All filtering is now handled natively by SQLite
     const results: AgentMemory[] = [];
     
     for (const row of rows) {
+      const tags = this.getTagsForMemory(row.id);
       const agentMemory = new AgentMemory(
         row.id,
         row.sentence,
         row.importance,
-        JSON.parse(row.tags) as string[]
+        tags
       );
-
-      // Apply additional filters that couldn't be done in SQL
-      if (matchesSearchCriteria(agentMemory, options)) {
-        results.push(agentMemory);
-      }
-    }
-
-    // Apply regex filtering if needed
-    if (options.contentRegex) {
-      const regex = new RegExp(options.contentRegex, 'i');
-      return results.filter(memory => regex.test(memory.sentence));
+      
+      results.push(agentMemory);
     }
 
     return results;
@@ -208,12 +343,8 @@ export class SQLiteMemory implements PersistentMemory {
       setParts.push('importance = ?');
       params.push(updates.importance);
     }
-    if (updates.tags !== undefined) {
-      setParts.push('tags = ?');
-      params.push(JSON.stringify(updates.tags));
-    }
 
-    if (setParts.length === 0) {
+    if (setParts.length === 0 && !updates.tags) {
       return false; // Nothing to update
     }
 
@@ -221,13 +352,37 @@ export class SQLiteMemory implements PersistentMemory {
     setParts.push('timestamp = ?');
     params.push(Date.now());
 
-    params.push(id); // For WHERE clause
+    let memoryUpdated = false;
 
-    const query = `UPDATE memories SET ${setParts.join(', ')} WHERE id = ?`;
-    const stmt = this.db.prepare(query);
-    const result = stmt.run(...params);
+    // Begin transaction for atomic updates
+    const transaction = this.db.transaction(() => {
+      // Update memory fields if any
+      if (setParts.length > 1) { // More than just timestamp
+        params.push(id); // For WHERE clause
+        const query = `UPDATE memories SET ${setParts.join(', ')} WHERE id = ?`;
+        const stmt = this.db?.prepare(query);
+        if (!stmt) {
+          throw new Error('Failed to prepare update statement');
+        }
+        const result = stmt.run(...params);
+        memoryUpdated = result.changes > 0;
+      } else {
+        // Check if memory exists
+        const checkStmt = this.db?.prepare('SELECT 1 FROM memories WHERE id = ?');
+        if (!checkStmt) {
+          throw new Error('Failed to prepare check statement');
+        }
+        memoryUpdated = checkStmt.get(id) !== undefined;
+      }
 
-    return result.changes > 0;
+      // Update tags if specified
+      if (updates.tags !== undefined && memoryUpdated) {
+        this.storeTagsForMemory(id, updates.tags);
+      }
+    });
+
+    transaction();
+    return memoryUpdated;
   }
 
   /**
@@ -239,10 +394,31 @@ export class SQLiteMemory implements PersistentMemory {
       throw new Error('SQLiteMemory not initialized. Call initialize() first.');
     }
 
+    // The foreign key constraint with CASCADE will automatically delete related memory_tags
     const stmt = this.db.prepare('DELETE FROM memories WHERE id = ?');
     const result = stmt.run(id);
     
+    // Clean up orphaned tags (tags not referenced by any memory)
+    this.cleanupOrphanedTags();
+    
     return result.changes > 0;
+  }
+
+  /**
+   * Clean up tags that are no longer referenced by any memory
+   */
+  private cleanupOrphanedTags(): void {
+    if (!this.db) {
+      return;
+    }
+
+    const stmt = this.db.prepare(`
+      DELETE FROM tags 
+      WHERE id NOT IN (
+        SELECT DISTINCT tag_id FROM memory_tags
+      )
+    `);
+    stmt.run();
   }
 
   /**
@@ -320,14 +496,24 @@ export class SQLiteMemory implements PersistentMemory {
     }
     
     // Get oldest memory
-    const oldestStmt = this.db.prepare('SELECT id, sentence, importance, tags FROM memories ORDER BY timestamp ASC LIMIT 1');
+    const oldestStmt = this.db.prepare('SELECT id, sentence, importance FROM memories ORDER BY timestamp ASC LIMIT 1');
     const oldestRow = oldestStmt.get() as MemoryRow | undefined;
-    const oldestMemory = oldestRow ? new AgentMemory(oldestRow.id, oldestRow.sentence, oldestRow.importance, JSON.parse(oldestRow.tags) as string[]) : undefined;
+    const oldestMemory = oldestRow ? new AgentMemory(
+      oldestRow.id, 
+      oldestRow.sentence, 
+      oldestRow.importance, 
+      this.getTagsForMemory(oldestRow.id)
+    ) : undefined;
     
     // Get newest memory
-    const newestStmt = this.db.prepare('SELECT id, sentence, importance, tags FROM memories ORDER BY timestamp DESC LIMIT 1');
+    const newestStmt = this.db.prepare('SELECT id, sentence, importance FROM memories ORDER BY timestamp DESC LIMIT 1');
     const newestRow = newestStmt.get() as MemoryRow | undefined;
-    const newestMemory = newestRow ? new AgentMemory(newestRow.id, newestRow.sentence, newestRow.importance, JSON.parse(newestRow.tags) as string[]) : undefined;
+    const newestMemory = newestRow ? new AgentMemory(
+      newestRow.id, 
+      newestRow.sentence, 
+      newestRow.importance, 
+      this.getTagsForMemory(newestRow.id)
+    ) : undefined;
 
     return {
       totalMemories,
