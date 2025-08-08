@@ -73,25 +73,57 @@ await agent.start()
 console.log('⚡ SSE Agent connected to Cubicler');
 ```
 
-### Stdio Agent (CLI)
+### Stdio Agent (CLI/Subprocess)
+
+For agents that run as subprocesses spawned by Cubicler:
 
 ```typescript
+#!/usr/bin/env node
 import { CubicAgent, StdioAgentClient, StdioAgentServer, MessageHandler } from '@cubicler/cubicagentkit';
 
-const client = new StdioAgentClient('npx', ['cubicler', '--server']);
+// Stdio agent is spawned by Cubicler, not the other way around
+const client = new StdioAgentClient();
 const server = new StdioAgentServer();
 const agent = new CubicAgent(client, server);
 
-const onMessage: MessageHandler = async () => ({
-  type: 'text',
-  content: 'CLI agent ready!',
-  usedToken: 10,
-});
+const messageHandler: MessageHandler = async (request, client, context) => {
+  const lastMessage = request.messages[request.messages.length - 1];
+  
+  // Make MCP calls back to Cubicler
+  const weather = await client.callTool('weather_get_current', { city: 'Paris' });
+  
+  return {
+    type: 'text',
+    content: `Weather: ${weather.temperature}°C`,
+    usedToken: 30
+  };
+};
 
 await agent
-  .start()
-  .onMessage(onMessage)
+  .onMessage(messageHandler)
+  .onTrigger(async (request) => ({
+    type: 'text',
+    content: `Webhook: ${request.trigger.name}`,
+    usedToken: 15
+  }))
   .listen();
+
+console.error('Stdio Agent ready'); // Use stderr for logging
+```
+
+Configure in Cubicler's `agents.json`:
+
+```json
+{
+  "agents": {
+    "my_stdio_agent": {
+      "name": "My Stdio Agent",
+      "transport": "stdio",
+      "command": "/path/to/my-agent.js",
+      "description": "A stdio-based agent"
+    }
+  }
+}
 ```
 
 ## 📚 Documentation

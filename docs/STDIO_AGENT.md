@@ -1,10 +1,50 @@
 # Stdio Agent Guide
 
-Stdio (Standard Input/Output) agents provide CLI-based communication, perfect for command-line tools, local development, and desktop applications. They communicate via stdin/stdout streams instead of HTTP.
+Stdio (Standard Input/Output) agents implement the correct Cubicler stdio protocol where **Cubicler spawns your agent as a subprocess** and communicates via stdin/stdout. CubicAgentKit provides `StdioAgentClient` and `StdioAgentServer` that work with the existing `CubicAgent` class for a **uniform API** across all transports.
+
+## Architecture Overview
+
+In the correct stdio implementation:
+
+1. **Cubicler spawns your agent** as a subprocess (e.g., `node my-agent.js`)
+2. **Agent receives requests** from Cubicler via stdin (`agent_request`)
+3. **Agent can make MCP calls** back to Cubicler via stdout (`mcp_request/mcp_response`)
+4. **Agent sends responses** to Cubicler via stdout (`agent_response`)
+
+This follows the bidirectional stdio protocol documented in the Cubicler integration guide.
+
+## Uniform API Pattern
+
+The same `CubicAgent` class works across **all transports** (HTTP, SSE, stdio):
+
+```typescript
+// HTTP Transport
+const agent = new CubicAgent(
+  new HttpAgentClient('http://localhost:1503'),
+  new HttpAgentServer(3000, '/agent')
+);
+
+// Stdio Transport (same pattern!)
+const agent = new CubicAgent(
+  new StdioAgentClient(),
+  new StdioAgentServer()
+);
+
+// Same fluent API for all transports
+await agent
+  .onMessage(messageHandler)
+  .onTrigger(triggerHandler)
+  .listen();
+```
 
 ## Quick Start
 
+### Basic Stdio Agent
+
+Create an executable agent script:
+
 ```typescript
+#!/usr/bin/env node
 import { 
   CubicAgent, 
   StdioAgentClient, 
@@ -12,629 +52,696 @@ import {
   createSQLiteMemoryRepository 
 } from '@cubicler/cubicagentkit';
 
-// Create stdio components
-const client = new StdioAgentClient('npx', ['cubicler', '--server']);
+// Create stdio client and server
+const client = new StdioAgentClient();
 const server = new StdioAgentServer();
 const memory = await createSQLiteMemoryRepository('./memories.db');
+
+// Create the agent using the uniform pattern
 const agent = new CubicAgent(client, server, memory);
 
-// Start agent
-await agent.start(async (request, client, context) => {
-  const lastMessage = request.messages[request.messages.length - 1];
-  
-  if (lastMessage.content?.includes('weather')) {
-    const weatherData = await client.callTool('weatherService_getCurrentWeather', {
-      city: 'Paris'
-    });
+// Use the familiar builder API
+await agent
+  .onMessage(async (request, client, context) => {
+    const lastMessage = request.messages[request.messages.length - 1];
+    
+    // Use memory
+    await context.memory?.remember(`User asked: ${lastMessage.content}`, 0.8, ['conversation']);
+    
+    // Make MCP calls (automatically tracked in context.toolCallCount)
+    if (lastMessage.content?.includes('weather')) {
+      const weather = await client.callTool('weather_get_current', {
+        city: 'Paris'
+      });
+      
+      return {
+        type: 'text',
+        content: `Weather: ${weather.temperature}°C`,
+        usedToken: 50
+      };
+    }
+    
     return {
       type: 'text',
-      content: `The weather is ${weatherData.temperature}°C`,
-      usedToken: 50
+      content: `You said: ${lastMessage.content}`,
+      usedToken: 25
     };
-  }
-  
-  return {
-    type: 'text',
-    content: `Processing: ${lastMessage.content}`,
-    usedToken: 20
-  };
-});
+  })
+  .onTrigger(async (request, client, context) => {
+    const trigger = request.trigger;
+    
+    return {
+      type: 'text',
+      content: `Webhook ${trigger.name} triggered`,
+      usedToken: 30
+    };
+  })
+  .listen();
 
-console.log('📱 Stdio Agent started');
+console.error('Stdio Agent started'); // Use stderr for logging
+```
+
+Make it executable and configure in Cubicler:
+
+```bash
+chmod +x my-agent.js
+```
+
+```json
+{
+  "agents": {
+    "my_stdio_agent": {
+      "name": "My Stdio Agent",
+      "transport": "stdio",
+      "command": "/path/to/my-agent.js",
+      "description": "A simple stdio agent"
+    }
+  }
+}
 ```
 
 ## StdioAgentClient
 
-Client that communicates with Cubicler via stdio, typically used for spawning Cubicler as a subprocess.
+Handles MCP calls back to Cubicler via the stdio protocol.
 
 ### Constructor
 
 ```typescript
 class StdioAgentClient implements AgentClient {
-  constructor(command: string, args?: string[])
+  constructor() // No parameters needed
 }
 ```
 
-**Parameters:**
+### Key Features
 
-- `command`: Command to execute (e.g., 'npx', 'cubicler', 'node')
-- `args`: Command arguments (e.g., ['cubicler', '--server', '--stdio'])
+- **No initialization** - Connection already established via Cubicler spawn
+- **MCP calls** - Sends `mcp_request` messages to Cubicler via stdout
+- **Response handling** - Listens for `mcp_response` messages on stdin
+- **Request correlation** - Uses UUIDs to match requests with responses
 
-### Methods
-
-```typescript
-// Initialize the subprocess and stdio communication
-async initialize(): Promise<void>
-
-// Call a tool via stdio JSON-RPC
-async callTool(toolName: string, parameters: JSONObject): Promise<JSONValue>
-```
-
-### Example Usage
+### Usage
 
 ```typescript
-// Using npx to start Cubicler
-const client = new StdioAgentClient('npx', ['cubicler', '--server', '--stdio']);
+const client = new StdioAgentClient();
 
-// Using direct binary
-const client = new StdioAgentClient('/usr/local/bin/cubicler', ['--server', '--stdio']);
-
-// Using Node.js script
-const client = new StdioAgentClient('node', ['./cubicler-server.js', '--stdio']);
-
-// Call tools
-await client.initialize();
-const result = await client.callTool('filesystem_readFile', {
-  path: './config.json'
-});
+// No need to call initialize() - connection is already established
+const weather = await client.callTool('weather_get_current', { city: 'Paris' });
 ```
 
 ## StdioAgentServer
 
-Server that handles incoming requests via stdin and responds via stdout.
+Handles incoming requests from Cubicler and sends responses back.
 
 ### Constructor
 
 ```typescript
 class StdioAgentServer implements AgentServer {
-  constructor()
+  constructor() // No parameters needed
 }
 ```
 
-### Methods
+### Key Features
 
-```typescript
-// Start listening for stdin messages
-async start(handler: RequestHandler): Promise<void>
+- **Request handling** - Receives `agent_request` messages from stdin
+- **Response sending** - Sends `agent_response` messages to stdout
+- **Line buffering** - Properly handles partial JSON messages
+- **Error handling** - Graceful error responses
 
-// Stop the stdio server
-async stop(): Promise<void>
-```
+### Usage
 
-### Example Usage
+The server is automatically managed by `CubicAgent` - you don't interact with it directly.
 
-```typescript
-const server = new StdioAgentServer();
+## Complete Examples
 
-await server.start(async (request, client, context) => {
-  // Handle the request
-  const lastMessage = request.messages[request.messages.length - 1];
-  
-  return {
-    type: 'text',
-    content: `Received: ${lastMessage.content}`,
-    usedToken: 15
-  };
-});
-```
-
-## Use Cases
-
-### Command Line Tools
-
-Perfect for building CLI utilities that integrate with Cubicler:
+### Weather Agent
 
 ```typescript
 #!/usr/bin/env node
-
 import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
 
-async function createCLITool() {
-  const client = new StdioAgentClient('cubicler', ['--server', '--stdio']);
-  const server = new StdioAgentServer();
-  const agent = new CubicAgent(client, server);
+const client = new StdioAgentClient();
+const server = new StdioAgentServer();
+const agent = new CubicAgent(client, server);
 
-  await agent.start(async (request, client, context) => {
+await agent
+  .onMessage(async (request, client, context) => {
     const lastMessage = request.messages[request.messages.length - 1];
     const userInput = lastMessage.content || '';
     
-    // Parse CLI-style commands
+    if (userInput.toLowerCase().includes('weather')) {
+      try {
+        // Extract city or use default
+        const city = extractCity(userInput) || 'New York';
+        const weather = await client.callTool('weather_get_current', { city });
+        
+        return {
+          type: 'text',
+          content: `🌤️ Weather in ${city}: ${weather.temperature}°C, ${weather.condition}`,
+          usedToken: 40
+        };
+      } catch (error) {
+        return {
+          type: 'text',
+          content: `❌ Sorry, couldn't get weather: ${error.message}`,
+          usedToken: 25
+        };
+      }
+    }
+    
+    return {
+      type: 'text',
+      content: `👋 Hello! Ask me about the weather. You said: "${userInput}"`,
+      usedToken: 20
+    };
+  })
+  .listen();
+
+function extractCity(text: string): string | null {
+  const match = text.match(/weather in ([a-zA-Z\s]+)/i);
+  return match ? match[1].trim() : null;
+}
+
+console.error('Weather agent ready!');
+```
+
+### File Operations Agent
+
+```typescript
+#!/usr/bin/env node
+import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
+
+const client = new StdioAgentClient();
+const server = new StdioAgentServer();
+const agent = new CubicAgent(client, server);
+
+await agent
+  .onMessage(async (request, client, context) => {
+    const lastMessage = request.messages[request.messages.length - 1];
+    const userInput = lastMessage.content || '';
+    
+    // Parse command-style input
     const [command, ...args] = userInput.trim().split(' ');
     
-    switch (command) {
-      case 'list':
-        const files = await client.callTool('filesystem_listDirectory', {
-          path: args[0] || '.'
-        });
-        return {
-          type: 'text',
-          content: `Files:\n${files.map(f => `  ${f.name}`).join('\n')}`,
-          usedToken: 30
-        };
-        
-      case 'read':
-        const content = await client.callTool('filesystem_readFile', {
-          path: args[0]
-        });
-        return {
-          type: 'text',
-          content: `File content:\n${content}`,
-          usedToken: 50
-        };
-        
-      default:
-        return {
-          type: 'text',
-          content: `Unknown command: ${command}. Available: list, read`,
-          usedToken: 10
-        };
-    }
-  });
-}
-
-if (require.main === module) {
-  createCLITool().catch(console.error);
-}
-```
-
-### Desktop Applications
-
-Integrate with desktop apps via stdio:
-
-```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
-import * as path from 'path';
-
-async function createDesktopAgent() {
-  // Assume Cubicler is bundled with the desktop app
-  const cubiclerPath = path.join(__dirname, '../bin/cubicler');
-  const client = new StdioAgentClient(cubiclerPath, ['--server', '--stdio']);
-  const server = new StdioAgentServer();
-  
-  const agent = new CubicAgent(client, server);
-
-  await agent.start(async (request, client, context) => {
-    const lastMessage = request.messages[request.messages.length - 1];
-    const userMessage = lastMessage.content || '';
-    
-    // Handle desktop-specific operations
-    if (userMessage.includes('screenshot')) {
-      const screenshot = await client.callTool('system_takeScreenshot', {});
+    try {
+      switch (command.toLowerCase()) {
+        case 'ls':
+        case 'list':
+          const files = await client.callTool('filesystem_list_directory', {
+            path: args[0] || '.'
+          });
+          return {
+            type: 'text',
+            content: `📁 Files:\n${files.map((f: any) => `  ${f.name}`).join('\n')}`,
+            usedToken: 30
+          };
+          
+        case 'read':
+        case 'cat':
+          if (!args[0]) {
+            return {
+              type: 'text',
+              content: '❌ Usage: read <filename>',
+              usedToken: 10
+            };
+          }
+          
+          const content = await client.callTool('filesystem_read_file', {
+            path: args[0]
+          });
+          return {
+            type: 'text',
+            content: `📄 Content of ${args[0]}:\n\n${content}`,
+            usedToken: 50
+          };
+          
+        case 'help':
+          return {
+            type: 'text',
+            content: `📋 Available commands:
+  • list [path] - List files in directory
+  • read <file> - Read file contents
+  • help - Show this help`,
+            usedToken: 20
+          };
+          
+        default:
+          return {
+            type: 'text',
+            content: `❓ Unknown command: ${command}. Type 'help' for available commands.`,
+            usedToken: 15
+          };
+      }
+    } catch (error) {
       return {
         type: 'text',
-        content: `Screenshot saved to: ${screenshot.path}`,
-        usedToken: 25
+        content: `❌ Error: ${error.message}`,
+        usedToken: 20
       };
     }
-    
-    if (userMessage.includes('notification')) {
-      await client.callTool('system_showNotification', {
-        title: 'Agent Notification',
-        message: userMessage.replace('notification ', '')
-      });
-      return {
-        type: 'text',
-        content: 'Notification sent!',
-        usedToken: 15
-      };
-    }
-    
-    return {
-      type: 'text',
-      content: 'Hello from desktop agent!',
-      usedToken: 10
-    };
-  });
-}
+  })
+  .listen();
+
+console.error('File operations agent ready!');
 ```
 
-### Development and Testing
-
-Great for local development and testing:
+### Multi-Tool Agent with Memory
 
 ```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer, createDefaultMemoryRepository } from '@cubicler/cubicagentkit';
+#!/usr/bin/env node
+import { 
+  CubicAgent, 
+  StdioAgentClient, 
+  StdioAgentServer,
+  createSQLiteMemoryRepository 
+} from '@cubicler/cubicagentkit';
 
-async function createDevAgent() {
-  // Use local Cubicler instance
-  const client = new StdioAgentClient('npm', ['run', 'cubicler:dev', '--', '--stdio']);
+async function main() {
+  const client = new StdioAgentClient();
   const server = new StdioAgentServer();
-  const memory = await createDefaultMemoryRepository();
-  
+  const memory = await createSQLiteMemoryRepository('./agent-memory.db');
   const agent = new CubicAgent(client, server, memory);
 
-  await agent.start(async (request, client, context) => {
-    const lastMessage = request.messages[request.messages.length - 1];
-    
-    // Debug logging
-    console.error(`[DEBUG] Received: ${lastMessage.content}`);
-    console.error(`[DEBUG] Tool calls so far: ${context.toolCallCount}`);
-    
-    // Simulate different scenarios for testing
-    if (lastMessage.content?.includes('test error')) {
-      throw new Error('Simulated error for testing');
-    }
-    
-    if (lastMessage.content?.includes('test memory')) {
-      await context.memory?.remember('Test memory entry', 0.8, ['test']);
-      const memories = await context.memory?.search({ tags: ['test'] });
+  await agent
+    .onMessage(async (request, client, context) => {
+      const lastMessage = request.messages[request.messages.length - 1];
+      const userInput = lastMessage.content || '';
+
+      // Remember this interaction
+      await context.memory?.remember(
+        `User: ${userInput}`,
+        0.7,
+        ['conversation', 'user-input']
+      );
+
+      // Handle different types of requests
+      if (userInput.toLowerCase().includes('remember') || userInput.toLowerCase().includes('recall')) {
+        const memories = await context.memory?.search({
+          query: userInput,
+          limit: 5
+        });
+
+        const memoryText = memories?.map(m => m.content).join('\n') || 'No memories found';
+        
+        return {
+          type: 'text',
+          content: `🧠 Here's what I remember:\n${memoryText}`,
+          usedToken: 50
+        };
+      }
+
+      if (userInput.toLowerCase().includes('weather')) {
+        const city = extractCity(userInput) || 'New York';
+        const weather = await client.callTool('weather_get_current', { city });
+        
+        await context.memory?.remember(
+          `Weather in ${city}: ${JSON.stringify(weather)}`,
+          0.8,
+          ['weather', 'tool-result']
+        );
+        
+        return {
+          type: 'text',
+          content: `🌤️ Weather in ${city}: ${weather.temperature}°C, ${weather.condition}`,
+          usedToken: 40
+        };
+      }
+
+      if (userInput.toLowerCase().includes('time')) {
+        const time = await client.callTool('time_get_current', {});
+        
+        return {
+          type: 'text',
+          content: `⏰ Current time: ${time.formatted}`,
+          usedToken: 25
+        };
+      }
+
+      // Default response
+      await context.memory?.remember(
+        `Bot: Acknowledged user message`,
+        0.5,
+        ['conversation', 'bot-response']
+      );
+
       return {
         type: 'text',
-        content: `Memory test: ${memories?.length} entries found`,
+        content: `👋 Hello! I can help with weather, time, or remembering things. You said: "${userInput}"\n\n📊 I've made ${context.toolCallCount} tool calls so far.`,
+        usedToken: 30
+      };
+    })
+    .onTrigger(async (request, client, context) => {
+      const trigger = request.trigger;
+      
+      // Remember trigger events
+      await context.memory?.remember(
+        `Webhook triggered: ${trigger.name}`,
+        0.9,
+        ['webhook', 'trigger']
+      );
+
+      return {
+        type: 'text',
+        content: `🔔 Webhook ${trigger.name} processed at ${trigger.triggeredAt}.\nPayload keys: ${Object.keys(trigger.payload || {}).join(', ')}`,
         usedToken: 25
       };
-    }
-    
-    return {
-      type: 'text',
-      content: 'Development agent is working!',
-      usedToken: 15
-    };
-  });
+    })
+    .listen();
+
+  console.error('Multi-tool agent with memory ready!');
 }
 
-if (process.env.NODE_ENV === 'development') {
-  createDevAgent().catch(console.error);
-}
-```
-
-## Configuration Examples
-
-### Environment-Based Configuration
-
-```typescript
-import { StdioAgentClient } from '@cubicler/cubicagentkit';
-
-function createClient() {
-  if (process.env.CUBICLER_BINARY) {
-    // Use specific binary
-    return new StdioAgentClient(process.env.CUBICLER_BINARY, ['--stdio']);
-  }
-  
-  if (process.env.NODE_ENV === 'development') {
-    // Development setup
-    return new StdioAgentClient('npm', ['run', 'cubicler:dev', '--', '--stdio']);
-  }
-  
-  // Production setup
-  return new StdioAgentClient('npx', ['@cubicler/cli', '--server', '--stdio']);
+function extractCity(text: string): string | null {
+  const match = text.match(/weather in ([a-zA-Z\s]+)/i);
+  return match ? match[1].trim() : null;
 }
 
-const client = createClient();
-```
-
-### Custom Process Management
-
-```typescript
-import { spawn } from 'child_process';
-import { StdioAgentClient } from '@cubicler/cubicagentkit';
-
-class CustomStdioClient extends StdioAgentClient {
-  constructor() {
-    // Start with custom environment and options
-    super('cubicler', ['--server', '--stdio'], {
-      env: {
-        ...process.env,
-        CUBICLER_CONFIG: './custom-config.json',
-        LOG_LEVEL: 'debug'
-      },
-      cwd: '/path/to/working/directory'
-    });
-  }
-}
-
-const client = new CustomStdioClient();
-```
-
-## Error Handling
-
-```typescript
-await agent.start(async (request, client, context) => {
-  try {
-    const result = await client.callTool('someService_someTool', { param: 'value' });
-    return {
-      type: 'text',
-      content: `Success: ${JSON.stringify(result)}`,
-      usedToken: 30
-    };
-  } catch (error) {
-    console.error('Stdio Agent error:', error);
-    
-    // Handle stdio-specific errors
-    if (error.message.includes('EPIPE')) {
-      console.error('Subprocess pipe closed unexpectedly');
-      return {
-        type: 'text',
-        content: 'Communication error with Cubicler subprocess.',
-        usedToken: 15
-      };
-    }
-    
-    if (error.message.includes('ENOENT')) {
-      console.error('Cubicler binary not found');
-      return {
-        type: 'text',
-        content: 'Cubicler not installed or not in PATH.',
-        usedToken: 15
-      };
-    }
-    
-    return {
-      type: 'text',
-      content: `Error: ${error.message}`,
-      usedToken: 15
-    };
-  }
+main().catch((error) => {
+  console.error('Agent startup error:', error);
+  process.exit(1);
 });
 ```
 
-## Process Lifecycle Management
+## Python Agent Example
 
-### Graceful Startup
+You can also implement stdio agents in other languages:
 
-```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
+```python
+#!/usr/bin/env python3
+import json
+import sys
+import uuid
+from datetime import datetime
 
-async function startWithRetry() {
-  const maxRetries = 3;
-  let retries = 0;
-  
-  while (retries < maxRetries) {
-    try {
-      const client = new StdioAgentClient('cubicler', ['--server', '--stdio']);
-      const server = new StdioAgentServer();
-      const agent = new CubicAgent(client, server);
-      
-      await agent.start(async (request, client, context) => {
-        // Your handler logic
-        return { type: 'text', content: 'OK', usedToken: 5 };
-      });
-      
-      console.log('Stdio agent started successfully');
-      break;
-    } catch (error) {
-      retries++;
-      console.error(`Failed to start (attempt ${retries}):`, error.message);
-      
-      if (retries >= maxRetries) {
-        console.error('Max retries exceeded, exiting');
-        process.exit(1);
-      }
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, 2000));
+class StdioPythonAgent:
+    def __init__(self):
+        self.pending_mcp_requests = {}
+
+    def send_message(self, message):
+        json.dump(message, sys.stdout)
+        sys.stdout.write('\n')
+        sys.stdout.flush()
+
+    def read_message(self):
+        line = sys.stdin.readline()
+        return json.loads(line.strip())
+
+    def call_mcp_tool(self, tool_name, arguments):
+        request_id = str(uuid.uuid4())
+        
+        self.send_message({
+            "type": "mcp_request",
+            "id": request_id,
+            "data": {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": tool_name, "arguments": arguments}
+            }
+        })
+        
+        # Wait for response
+        while True:
+            message = self.read_message()
+            if message["type"] == "mcp_response" and message["id"] == request_id:
+                if "error" in message["data"]:
+                    raise Exception(f"MCP Error: {message['data']['error']['message']}")
+                return message["data"].get("result")
+
+    def run(self):
+        # Read initial agent request
+        initial_message = self.read_message()
+        if initial_message["type"] != "agent_request":
+            raise ValueError(f"Expected agent_request, got {initial_message['type']}")
+        
+        agent_data = initial_message["data"]
+        messages = agent_data.get('messages', [])
+        
+        if messages:
+            last_message = messages[-1]['content']
+            
+            if 'weather' in last_message.lower():
+                try:
+                    weather = self.call_mcp_tool('weather_get_current', {'city': 'London'})
+                    content = f"🌤️ Weather: {weather}"
+                    used_tools = 1
+                except Exception as e:
+                    content = f"❌ Weather error: {e}"
+                    used_tools = 0
+            else:
+                content = f"👋 Echo: {last_message}"
+                used_tools = 0
+        else:
+            content = "No messages received"
+            used_tools = 0
+        
+        # Send response
+        self.send_message({
+            "type": "agent_response",
+            "data": {
+                "timestamp": datetime.now().isoformat(),
+                "type": "text",
+                "content": content,
+                "metadata": {"usedToken": 30, "usedTools": used_tools}
+            }
+        })
+
+if __name__ == "__main__":
+    agent = StdioPythonAgent()
+    agent.run()
+```
+
+## Message Protocol
+
+### Input: agent_request
+
+Your agent receives this from Cubicler via stdin:
+
+```json
+{
+  "type": "agent_request",
+  "data": {
+    "agent": {
+      "identifier": "my_agent",
+      "name": "My Agent",
+      "description": "Description",
+      "prompt": "System prompt"
+    },
+    "tools": [
+      {"name": "weather_get_current", "description": "Get current weather"}
+    ],
+    "servers": [
+      {"identifier": "weather_service", "name": "Weather Service"}
+    ],
+    "messages": [
+      {"sender": {"id": "user1"}, "type": "text", "content": "Hello"}
+    ]
+  }
+}
+```
+
+### Output: agent_response
+
+Your agent sends this to Cubicler via stdout:
+
+```json
+{
+  "type": "agent_response",
+  "data": {
+    "timestamp": "2024-01-01T12:00:00.000Z",
+    "type": "text",
+    "content": "Hello! How can I help?",
+    "metadata": {
+      "usedToken": 25,
+      "usedTools": 0
     }
   }
 }
-
-startWithRetry();
 ```
 
-### Graceful Shutdown
+### MCP Calls: mcp_request/mcp_response
 
-```typescript
-let agent: CubicAgent | null = null;
+To call tools, send mcp_request:
 
-async function startAgent() {
-  const client = new StdioAgentClient('cubicler', ['--server', '--stdio']);
-  const server = new StdioAgentServer();
-  agent = new CubicAgent(client, server);
-
-  await agent.start(async (request, client, context) => {
-    // Your handler logic
-    return { type: 'text', content: 'Processing...', usedToken: 10 };
-  });
+```json
+{
+  "type": "mcp_request",
+  "id": "unique-uuid",
+  "data": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "weather_get_current",
+      "arguments": {"city": "Paris"}
+    }
+  }
 }
+```
 
-// Graceful shutdown handlers
-process.on('SIGINT', async () => {
-  console.log('Received SIGINT, shutting down gracefully...');
-  if (agent) {
-    await agent.stop();
+Cubicler responds with mcp_response:
+
+```json
+{
+  "type": "mcp_response",
+  "id": "unique-uuid",
+  "data": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {"temperature": "22°C", "condition": "sunny"}
   }
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM, shutting down gracefully...');
-  if (agent) {
-    await agent.stop();
-  }
-  process.exit(0);
-});
-
-startAgent().catch(console.error);
+}
 ```
 
 ## Testing
 
-### Unit Testing
+### Unit Tests
+
+The uniform pattern makes testing easier:
 
 ```typescript
-import { StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
 
-describe('StdioAgent', () => {
-  let client: StdioAgentClient;
-  let server: StdioAgentServer;
-  
-  beforeEach(async () => {
-    client = new StdioAgentClient('node', ['./test/mock-cubicler.js']);
-    server = new StdioAgentServer();
-    await client.initialize();
-  });
-  
-  afterEach(async () => {
-    await client.stop();
-    await server.stop();
-  });
-  
-  it('should handle tool calls', async () => {
-    const result = await client.callTool('test_echo', { message: 'hello' });
-    expect(result).toEqual({ message: 'hello' });
-  });
-  
-  it('should process requests', async () => {
-    const response = await new Promise((resolve) => {
-      server.start(async (request, client, context) => {
-        resolve({
-          type: 'text',
-          content: 'Test response',
-          usedToken: 10
-        });
-        return {
-          type: 'text',
-          content: 'Test response',
-          usedToken: 10
-        };
-      });
-      
-      // Send test request to server
-      // Implementation depends on your test setup
-    });
+describe('Stdio Agent', () => {
+  it('should handle requests like other transports', async () => {
+    const mockClient = {
+      initialize: vi.fn(),
+      callTool: vi.fn().mockResolvedValue({ temperature: '20°C' })
+    } as any;
     
-    expect(response).toBeDefined();
+    const mockServer = {
+      start: vi.fn(),
+      stop: vi.fn()
+    } as any;
+
+    const agent = new CubicAgent(mockClient, mockServer);
+    
+    // Same API as HTTP/SSE agents
+    const builder = agent.onMessage(async (request, client, context) => ({
+      type: 'text',
+      content: 'Test response',
+      usedToken: 10
+    }));
+
+    expect(builder).toBeDefined();
   });
 });
 ```
 
-### Integration Testing
+### Manual Testing
 
-```typescript
-// test/integration/stdio-agent.test.ts
-import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
-import { spawn } from 'child_process';
+Test your agent manually:
 
-describe('Stdio Agent Integration', () => {
-  it('should integrate with real Cubicler instance', async () => {
-    // Start real Cubicler process for testing
-    const cubiclerProcess = spawn('cubicler', ['--server', '--stdio'], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    
-    try {
-      const client = new StdioAgentClient(cubiclerProcess.command, cubiclerProcess.args);
-      const server = new StdioAgentServer();
-      const agent = new CubicAgent(client, server);
-      
-      let responseReceived = false;
-      
-      await agent.start(async (request, client, context) => {
-        responseReceived = true;
-        return {
-          type: 'text',
-          content: 'Integration test response',
-          usedToken: 10
-        };
-      });
-      
-      // Simulate receiving a request
-      // This would typically come from Cubicler
-      setTimeout(() => {
-        expect(responseReceived).toBe(true);
-      }, 1000);
-      
-    } finally {
-      cubiclerProcess.kill();
-    }
-  }, 10000);
-});
+```bash
+# Create test input
+echo '{"type":"agent_request","data":{"agent":{"identifier":"test","name":"Test","description":"Test","prompt":"Test"},"tools":[],"servers":[],"messages":[{"sender":{"id":"user"},"type":"text","content":"Hello"}]}}' | node my-agent.js
 ```
 
 ## Best Practices
 
-1. **Process Management**: Handle subprocess lifecycle properly
-2. **Error Handling**: Catch stdio-specific errors (EPIPE, ENOENT)
-3. **Resource Cleanup**: Always close processes and streams
-4. **Path Configuration**: Use absolute paths when possible
-5. **Environment Variables**: Configure via environment for flexibility
-6. **Logging**: Log to stderr to avoid interfering with stdio communication
+### 1. Use stderr for logging
 
-## Common Patterns
+```typescript
+console.error('Debug info'); // ✅ Goes to stderr
+console.log('Debug info');   // ❌ Interferes with protocol
+```
 
-### CLI Tool Pattern
+### 2. Handle errors gracefully
+
+```typescript
+await agent
+  .onMessage(async (request, client, context) => {
+    try {
+      const result = await client.callTool('some_tool', {});
+      return { type: 'text', content: `Success: ${result}`, usedToken: 30 };
+    } catch (error) {
+      console.error('Tool error:', error); // Log to stderr
+      return { type: 'text', content: `Error: ${error.message}`, usedToken: 15 };
+    }
+  })
+  .listen();
+```
+
+### 3. Make executables properly
 
 ```bash
 #!/usr/bin/env node
-# my-agent-cli
+# At the top of your script
 
-npx my-agent-package --stdio
+chmod +x my-agent.js  # Make executable
 ```
 
-### Desktop App Integration
+### 4. Use memory for context
 
-```javascript
-// In Electron main process
-const { spawn } = require('child_process');
-const path = require('path');
+```typescript
+const memory = await createSQLiteMemoryRepository('./memories.db');
+const agent = new CubicAgent(client, server, memory);
 
-const agentProcess = spawn('node', [
-  path.join(__dirname, 'stdio-agent.js')
-], {
-  stdio: ['pipe', 'pipe', 'pipe']
-});
-
-// Handle agent communication
-agentProcess.stdout.on('data', (data) => {
-  // Process agent responses
-});
+await agent
+  .onMessage(async (request, client, context) => {
+    // Remember interactions
+    await context.memory?.remember('User interaction', 0.8, ['conversation']);
+    
+    // Search relevant context
+    const memories = await context.memory?.search({ query: userInput, limit: 3 });
+    
+    // Use memories in response...
+  })
+  .listen();
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Subprocess Not Found**
+**Agent not starting**
 
-```
-Error: spawn cubicler ENOENT
-```
+- Check shebang line: `#!/usr/bin/env node`
+- Verify executable permissions: `chmod +x my-agent.js`
+- Ensure dependencies are installed: `npm install`
 
-- Ensure Cubicler is installed and in PATH
-- Use absolute paths if needed
-- Check execute permissions
+**JSON parsing errors**
 
-**Broken Pipe Errors**
+- Only write protocol messages to stdout
+- Use stderr for all logging: `console.error()`
+- Test JSON output with: `echo 'input' | node agent.js | jq`
 
-```
-Error: write EPIPE
-```
+**MCP timeouts**
 
-- Subprocess terminated unexpectedly
-- Check subprocess logs for errors
-- Implement process restart logic
-
-**JSON Parse Errors**
-
-```
-Error: Unexpected token in JSON
-```
-
-- Mixing stderr output with stdio communication
-- Ensure clean JSON-RPC protocol on stdin/stdout
-- Redirect other output to stderr
+- Check MCP request/response ID matching
+- Verify tool names match available tools
+- Handle MCP errors gracefully
 
 ### Debugging
 
-Enable debug logging:
+Add debugging to your agent:
 
 ```typescript
-const client = new StdioAgentClient('cubicler', ['--server', '--stdio', '--debug']);
-
-// Monitor subprocess stderr for debugging
-client.process.stderr?.on('data', (data) => {
-  console.error(`Cubicler: ${data}`);
-});
+await agent
+  .onMessage(async (request, client, context) => {
+    console.error('📥 Received:', JSON.stringify(request, null, 2));
+    
+    const response = {
+      type: 'text' as const,
+      content: 'Debug response',
+      usedToken: 10
+    };
+    
+    console.error('📤 Sending:', JSON.stringify(response, null, 2));
+    return response;
+  })
+  .listen();
 ```
 
-For memory usage in CLI contexts, see [MEMORY_SYSTEM.md](MEMORY_SYSTEM.md).
+The stderr output will be visible in Cubicler's logs without interfering with the stdio protocol.
+
+## Benefits of Uniform Pattern
+
+1. **✅ Consistency** - Same `CubicAgent` API across HTTP, SSE, and stdio
+2. **✅ Familiarity** - Developers already know the pattern
+3. **✅ Memory support** - Works with existing memory system
+4. **✅ Tool tracking** - Automatic tracking via `CallContext`
+5. **✅ Testability** - Easy to mock `AgentClient` and `AgentServer`
+6. **✅ Flexibility** - Mix and match transports as needed
+
+For memory usage in stdio agents, see [MEMORY_SYSTEM.md](MEMORY_SYSTEM.md).
