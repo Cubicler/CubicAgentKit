@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HttpAgentServer } from '../../src/server/http-agent-server.js';
 import { JWTMiddlewareConfig } from '../../src/interface/jwt-auth.js';
-import { AgentRequest } from '../../src/model/agent-request.js';
+import { AgentRequest } from '../../src/model/agent.js';
 import { Server } from 'http';
 
 // Mock express module

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HttpAgentServer } from '../../src/server/http-agent-server.js';
-import { AgentRequest } from '../../src/model/agent-request.js';
-import { AgentResponse } from '../../src/model/agent-response.js';
+import { AgentRequest } from '../../src/model/agent.js';
+import { AgentResponse } from "../../src/model/agent.js";
 import { RequestHandler } from '../../src/interface/agent-server.js';
 import { AgentInfo, AgentTool, ServerInfo, Message } from '../../src/model/types.js';
 import axios from 'axios';
