@@ -76,15 +76,22 @@ console.log('⚡ SSE Agent connected to Cubicler');
 ### Stdio Agent (CLI)
 
 ```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer } from '@cubicler/cubicagentkit';
+import { CubicAgent, StdioAgentClient, StdioAgentServer, MessageHandler } from '@cubicler/cubicagentkit';
 
 const client = new StdioAgentClient('npx', ['cubicler', '--server']);
 const server = new StdioAgentServer();
 const agent = new CubicAgent(client, server);
 
-await agent.start(async (request, client, context) => {
-  return { type: 'text', content: 'CLI agent ready!', usedToken: 10 };
+const onMessage: MessageHandler = async () => ({
+  type: 'text',
+  content: 'CLI agent ready!',
+  usedToken: 10,
 });
+
+await agent
+  .start()
+  .onMessage(onMessage)
+  .listen();
 ```
 
 ## 📚 Documentation
@@ -152,29 +159,35 @@ CubicAgentKit follows a **composition-based architecture** with clean separation
 
 ### CubicAgent
 
-Main class for creating and managing Cubicler agents with optional memory integration.
+Main class for creating and managing Cubicler agents. Uses a fluent builder to register handlers.
 
 ```typescript
 class CubicAgent {
   constructor(
-    agentClient: AgentClient, 
-    server: AgentServer, 
+    agentClient: AgentClient,
+    server: AgentServer,
     memory?: MemoryRepository
-  )
-  
-  async start(handler: DispatchHandler): Promise<void>
-  async stop(): Promise<void>
+  ) {}
+
+  // Begin fluent configuration
+  start(): AgentBuilder;
+
+  // Stop the server
+  async stop(): Promise<void>;
+
+  // Manually dispatch a request using configured handlers
+  async dispatch(request: AgentRequest): Promise<AgentResponse>;
 }
 
-type DispatchHandler = (
-  request: AgentRequest,
-  client: AgentClient,
-  context: CallContext
-) => Promise<RawAgentResponse>
+interface AgentBuilder {
+  onMessage(handler: MessageHandler): AgentBuilder;
+  onTrigger(handler: TriggerHandler): AgentBuilder;
+  listen(): Promise<void>;
+}
 
 interface CallContext {
-  readonly toolCallCount: number;
-  memory?: MemoryRepository;
+  readonly toolCallCount: number; // tool calls in this request
+  readonly memory?: MemoryRepository; // optional repository from constructor
 }
 ```
 
@@ -191,6 +204,26 @@ const memory = await createSQLiteMemoryRepository('./memories.db');
 
 // Custom setup
 const memory = await createMemoryRepository(longTermStorage, 2000, 0.7);
+```
+
+### Trigger Handling
+
+Register a webhook trigger handler with the builder. When Cubicler invokes a trigger, your handler receives a `TriggerRequest`:
+
+```typescript
+import { CubicAgent, HttpAgentClient, HttpAgentServer, TriggerHandler } from '@cubicler/cubicagentkit';
+
+const agent = new CubicAgent(
+  new HttpAgentClient('http://localhost:1503'),
+  new HttpAgentServer(3000, '/agent')
+);
+
+const onTrigger: TriggerHandler = async (request, client, ctx) => {
+  // request.trigger contains identifier and payload
+  return { type: 'text', content: `Triggered: ${request.trigger.identifier}` , usedToken: 5 };
+};
+
+await agent.start().onTrigger(onTrigger).listen();
 ```
 
 ### Request & Response Types
