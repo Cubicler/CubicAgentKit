@@ -1,8 +1,14 @@
 // Core classes
 export { CubicAgent } from './core/cubic-agent.js';
+
+// HTTP transport
 export { HttpAgentClient } from './client/http-agent-client.js';
 export { HttpAgentServer } from './server/http-agent-server.js';
+
+// SSE transport
 export { SSEAgentServer } from './server/sse-agent-server.js';
+
+// Stdio transport
 export { StdioAgentClient } from './client/stdio-agent-client.js';
 export { StdioAgentServer } from './server/stdio-agent-server.js';
 
@@ -44,6 +50,9 @@ export type {
   AgentInfo 
 } from './model/types.js';
 export type { MCPRequest, MCPResponse, MCPError, MCPToolCall } from './model/mcp.js';
+
+// Stdio types
+export type { StdioMessage } from './client/stdio-agent-client.js';
 
 // Memory types (sentence-based)
 export type {
