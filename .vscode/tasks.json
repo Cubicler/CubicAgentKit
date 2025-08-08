@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Codex: GPT-5 (TUI)",
+      "type": "shell",
+      "command": "codex",
+      "args": ["--model", "gpt-5"],
+      "options": { "cwd": "${workspaceFolder}" }
+    }
+  ]
+}

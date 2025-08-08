@@ -48,6 +48,23 @@ describe('SSEAgentServer', () => {
     });
   });
 
+  describe('validation', () => {
+    it('should validate trigger-only SSE message', () => {
+      // Access private method for unit validation
+      const isValid = (server as any).isValidSSEMessage?.bind(server);
+      if (!isValid) {return;} // Skip if method signature changes
+
+      const valid = isValid({
+        id: 'req-1',
+        agent: { identifier: 'a', name: 'n', description: 'd', prompt: 'p' },
+        tools: [],
+        servers: [],
+        trigger: { type: 'webhook', identifier: 't', name: 'n', description: 'd', triggeredAt: '2024-01-01T00:00:00.000Z', payload: {} }
+      });
+      expect(valid).toBe(true);
+    });
+  });
+
   describe('stop', () => {
     it('should handle stop when not running', async () => {
       await expect(server.stop()).resolves.toBeUndefined();

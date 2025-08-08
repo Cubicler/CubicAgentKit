@@ -242,4 +242,80 @@ describe('JWT Middleware', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
   });
+
+  describe('limitations and claims enforcement', () => {
+    it('should NOT verify token signature (dev-only verifier)', () => {
+      const config: JWTMiddlewareConfig = {
+        verification: {
+          ignoreExpiration: true,
+          secret: 'unused-secret',
+          algorithms: ['HS256']
+        }
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Well-formed token with arbitrary signature
+      const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'user123' })).toString('base64url');
+      const badSignature = 'this-is-not-a-real-signature';
+      const token = `${header}.${payload}.${badSignature}`;
+
+      req.headers = { authorization: `Bearer ${token}` };
+
+      const middleware = createJWTMiddleware(config);
+      middleware(req as JWTRequest, res as Response, next);
+
+      expect(req.jwt?.sub).toBe('user123');
+      expect(next).toHaveBeenCalled();
+      // Warns that signature verification is not implemented
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('should enforce allowed algorithms list', () => {
+      const config: JWTMiddlewareConfig = {
+        verification: {
+          ignoreExpiration: true,
+          algorithms: ['HS256']
+        }
+      };
+
+      // Token declares RS256 but config only allows HS256
+      const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'user123' })).toString('base64url');
+      const signature = 'sig';
+      const token = `${header}.${payload}.${signature}`;
+
+      req.headers = { authorization: `Bearer ${token}` };
+
+      const middleware = createJWTMiddleware(config);
+      middleware(req as JWTRequest, res as Response, next);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject tokens with not-before (nbf) in the future', () => {
+      const config: JWTMiddlewareConfig = {
+        verification: {
+          ignoreExpiration: true
+        }
+      };
+
+      const future = Math.floor(Date.now() / 1000) + 3600; // 1h in future
+      const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'user123', nbf: future })).toString('base64url');
+      const signature = 'sig';
+      const token = `${header}.${payload}.${signature}`;
+
+      req.headers = { authorization: `Bearer ${token}` };
+
+      const middleware = createJWTMiddleware(config);
+      middleware(req as JWTRequest, res as Response, next);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(next).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { AgentRequest } from '../../src/model/agent-request.js';
+import { AgentRequest, MessageRequest, TriggerRequest } from '../../src/model/agent-request.js';
 import { RawAgentResponse, AgentResponse } from '../../src/model/agent-response.js';
 
 /**
@@ -40,6 +40,41 @@ export function createMockAgentRequest(overrides: Partial<AgentRequest> = {}): A
         content: 'Hello, agent!'
       }
     ],
+    ...overrides
+  };
+}
+
+/**
+ * Helper to create mock MessageRequest for testing
+ */
+export function createMockMessageRequest(overrides: Partial<MessageRequest> = {}): MessageRequest {
+  const baseRequest = createMockAgentRequest();
+  return {
+    agent: baseRequest.agent,
+    tools: baseRequest.tools,
+    servers: baseRequest.servers,
+    messages: baseRequest.messages!,
+    ...overrides
+  };
+}
+
+/**
+ * Helper to create mock TriggerRequest for testing
+ */
+export function createMockTriggerRequest(overrides: Partial<TriggerRequest> = {}): TriggerRequest {
+  const baseRequest = createMockAgentRequest();
+  return {
+    agent: baseRequest.agent,
+    tools: baseRequest.tools,
+    servers: baseRequest.servers,
+    trigger: {
+      type: 'webhook',
+      identifier: 'test-webhook',
+      name: 'Test Webhook',
+      description: 'A test webhook for unit testing',
+      triggeredAt: '2025-01-01T00:00:00Z',
+      payload: { test: 'data', value: 42 }
+    },
     ...overrides
   };
 }

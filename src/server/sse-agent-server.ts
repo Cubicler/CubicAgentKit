@@ -3,17 +3,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-/* eslint-disable @typescript-eslint/no-require-imports */
-
 import axios, { AxiosInstance } from 'axios';
-// Import EventSource with proper error handling for different module formats
-let EventSource: any;
-try {
-  const eventsourceModule = require('eventsource');
-  EventSource = eventsourceModule.EventSource || eventsourceModule.default || eventsourceModule;
-} catch (error) {
-  console.error('Failed to import EventSource:', error);
-}
+type SSEMessageEvent = { data: string };
 
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent-request.js';
@@ -33,7 +24,7 @@ interface SSEMessage extends AgentRequest {
  * Connects to Cubicler's SSE endpoint to receive agent requests and sends responses back via HTTP POST
  */
 export class SSEAgentServer implements AgentServer {
-  private eventSource?: EventSource;
+  private eventSource?: any;
   private readonly httpClient: AxiosInstance;
   private handler?: RequestHandler;
   private isRunning = false;
@@ -110,11 +101,13 @@ export class SSEAgentServer implements AgentServer {
     
     const eventSourceOptions = await prepareEventSourceOptions();
     
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>(async (resolve, reject) => {
       let resolved = false;
       
       try {
-        this.eventSource = new EventSource(sseUrl, eventSourceOptions);
+        const mod = await import('eventsource');
+        const EventSourceCtor: any = (mod as any).EventSource || (mod as any).default || mod;
+        this.eventSource = new EventSourceCtor(sseUrl, eventSourceOptions);
 
         this.eventSource!.onopen = () => {
           if (!resolved) {
@@ -124,7 +117,7 @@ export class SSEAgentServer implements AgentServer {
           }
         };
 
-        this.eventSource!.onmessage = (event: MessageEvent) => {
+        this.eventSource!.onmessage = (event: SSEMessageEvent) => {
           void this.handleSSEMessage(event);
         };
 
@@ -177,7 +170,7 @@ export class SSEAgentServer implements AgentServer {
    * Handle incoming SSE messages
    * @private
    */
-  private async handleSSEMessage(event: MessageEvent): Promise<void> {
+  private async handleSSEMessage(event: SSEMessageEvent): Promise<void> {
     if (!this.handler) {
       console.error('No handler available to process SSE message');
       return;
@@ -247,17 +240,18 @@ export class SSEAgentServer implements AgentServer {
     
     const obj = data as Record<string, unknown>;
     
+    const hasMessages = Array.isArray(obj.messages);
+    const hasTrigger = obj.trigger && typeof obj.trigger === 'object' && !Array.isArray(obj.trigger);
+
+    // Require exactly one of messages or trigger
+    const hasExactlyOne = (hasMessages ? 1 : 0) + (hasTrigger ? 1 : 0) === 1;
+
     return Boolean(
-      obj.id &&
-      typeof obj.id === 'string' &&
-      obj.agent &&
-      typeof obj.agent === 'object' &&
-      obj.tools &&
-      Array.isArray(obj.tools) &&
-      obj.servers &&
-      Array.isArray(obj.servers) &&
-      obj.messages &&
-      Array.isArray(obj.messages)
+      obj.id && typeof obj.id === 'string' &&
+      obj.agent && typeof obj.agent === 'object' &&
+      obj.tools && Array.isArray(obj.tools) &&
+      obj.servers && Array.isArray(obj.servers) &&
+      hasExactlyOne
     );
   }
 

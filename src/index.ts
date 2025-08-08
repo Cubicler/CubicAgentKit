@@ -18,13 +18,20 @@ export {
 
 // Interfaces
 export type { AgentClient } from './interface/agent-client.js';
-export type { AgentServer, DispatchHandler, RequestHandler, CallContext } from './interface/agent-server.js';
+export type { 
+  AgentServer, 
+  RequestHandler, 
+  CallContext, 
+  MessageHandler, 
+  TriggerHandler, 
+  AgentBuilder 
+} from './interface/agent-server.js';
 export type { MemoryRepository, AgentMemory, MemorySearchOptions } from './interface/memory-repository.js';
 export type { PersistentMemory } from './interface/persistent-memory.js';
 export type { ShortTermMemory } from './interface/short-term-memory.js';
 
 // Model types
-export type { AgentRequest } from './model/agent-request.js';
+export type { AgentRequest, MessageRequest, TriggerRequest } from './model/agent-request.js';
 export type { AgentResponse, RawAgentResponse } from './model/agent-response.js';
 export type { 
   JSONValue, 

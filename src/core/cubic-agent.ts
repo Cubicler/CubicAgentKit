@@ -1,9 +1,67 @@
 import { AgentClient } from '../interface/agent-client.js';
-import { AgentServer, DispatchHandler, CallContext } from '../interface/agent-server.js';
+import { AgentServer, DispatchHandler, CallContext, MessageHandler, TriggerHandler, AgentBuilder } from '../interface/agent-server.js';
 import { MemoryRepository } from '../interface/memory-repository.js';
 import { TrackingAgentClient } from '../client/tracking-agent-client.js';
-import { AgentRequest } from '../model/agent-request.js';
+import { AgentRequest, MessageRequest, TriggerRequest } from '../model/agent-request.js';
 import { AgentResponse } from '../model/agent-response.js';
+
+/**
+ * Internal builder implementation for CubicAgent
+ */
+class CubicAgentBuilder implements AgentBuilder {
+  private messageHandler?: MessageHandler;
+  private triggerHandler?: TriggerHandler;
+  private hasStarted = false;
+
+  constructor(
+    private readonly agent: CubicAgent
+  ) {}
+
+  onMessage(handler: MessageHandler): AgentBuilder {
+    this.messageHandler = handler;
+    return this;
+  }
+
+  onTrigger(handler: TriggerHandler): AgentBuilder {
+    this.triggerHandler = handler;
+    return this;
+  }
+
+  async listen(): Promise<void> {
+    if (this.hasStarted) {
+      throw new Error('Agent server has already been started. Cannot call listen() multiple times.');
+    }
+    
+    this.hasStarted = true;
+    
+    // Create the unified handler that routes to appropriate handlers
+    const unifiedHandler: DispatchHandler = async (request, client, context) => {
+      // Check if this is a message request
+      if ('messages' in request && request.messages) {
+        if (!this.messageHandler) {
+          throw new Error('Received message request but no message handler was registered. Use onMessage() to register a handler.');
+        }
+        return await this.messageHandler(request as MessageRequest, client, context);
+      }
+      
+      // Check if this is a trigger request
+      if ('trigger' in request && request.trigger) {
+        if (!this.triggerHandler) {
+          throw new Error('Received trigger request but no trigger handler was registered. Use onTrigger() to register a handler.');
+        }
+        return await this.triggerHandler(request as TriggerRequest, client, context);
+      }
+      
+      // Invalid request structure
+      throw new Error('Invalid request: neither messages nor trigger provided');
+    };
+    
+    await this.agent.startWithHandler(unifiedHandler);
+    
+    // Store the unified handler for later use in dispatch calls
+    this.agent.setUnifiedHandler(unifiedHandler);
+  }
+}
 
 /**
  * Main orchestrator class for CubicAgent
@@ -11,7 +69,7 @@ import { AgentResponse } from '../model/agent-response.js';
  */
 export class CubicAgent {
   private isInitialized = false;
-  private dispatchHandler?: DispatchHandler;
+  private unifiedHandler?: DispatchHandler;
 
   /**
    * Creates a new CubicAgent instance
@@ -26,20 +84,32 @@ export class CubicAgent {
   ) {}
 
   /**
-   * Start the agent server with the provided dispatch handler
-   * This method starts the HTTP server with a wrapped handler that provides a fresh tracking client per request
-   * The AgentClient is initialized lazily on the first request to ensure it's only done when needed
+   * Start building the agent configuration with handlers
+   * Returns a builder that allows configuring message and trigger handlers
    * 
-   * @param handler - The dispatch handler function to process requests
-   * @throws Error if startup fails (thrown up to implementer)
+   * @returns AgentBuilder for fluent configuration
    */
-  async start(handler: DispatchHandler): Promise<void> {
-    this.dispatchHandler = handler;
-    
+  start(): AgentBuilder {
+    return new CubicAgentBuilder(this);
+  }
+
+  /**
+   * Internal method used by builder to start with a unified handler
+   * @internal
+   */
+  async startWithHandler(handler: DispatchHandler): Promise<void> {
     // Start the HTTP server with the wrapped handler
     await this.server.start(async (request) => {
       return this.executeDispatch(request, handler);
     });
+  }
+
+  /**
+   * Internal method to store the unified handler for dispatch calls
+   * @internal
+   */
+  setUnifiedHandler(handler: DispatchHandler): void {
+    this.unifiedHandler = handler;
   }
 
   /**
@@ -48,14 +118,13 @@ export class CubicAgent {
    * 
    * @param request - The agent request to process
    * @returns Promise resolving to the complete agent response
-   * @throws Error if no dispatch handler is configured or if dispatch fails
+   * @throws Error if no handler is configured or if dispatch fails
    */
   async dispatch(request: AgentRequest): Promise<AgentResponse> {
-    if (!this.dispatchHandler) {
-      throw new Error('No dispatch handler configured. Call start() first or provide a handler.');
+    if (!this.unifiedHandler) {
+      throw new Error('No handler configured. Start the agent first using start().onMessage().onTrigger().listen()');
     }
-    
-    return this.executeDispatch(request, this.dispatchHandler);
+    return this.executeDispatch(request, this.unifiedHandler);
   }
 
   /**

@@ -204,29 +204,19 @@ export class StdioAgentServer implements AgentServer {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Need to validate unknown object structure
   private isValidAgentRequest(obj: any): obj is AgentRequest {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Type guard function needs any validation
-    return (
-      obj &&
-      typeof obj === 'object' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      obj.agent &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      typeof obj.agent === 'object' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
+    if (!obj || typeof obj !== 'object') return false;
+    const hasAgent = obj.agent && typeof obj.agent === 'object' &&
       typeof obj.agent.identifier === 'string' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
       typeof obj.agent.name === 'string' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
       typeof obj.agent.description === 'string' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      typeof obj.agent.prompt === 'string' &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      Array.isArray(obj.tools) &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      Array.isArray(obj.servers) &&
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Validating unknown structure
-      Array.isArray(obj.messages)
-    );
+      typeof obj.agent.prompt === 'string';
+    const hasTools = Array.isArray(obj.tools);
+    const hasServers = Array.isArray(obj.servers);
+    const hasMessages = Array.isArray(obj.messages);
+    const hasTrigger = obj.trigger && typeof obj.trigger === 'object' && !Array.isArray(obj.trigger);
+    const hasExactlyOne = (hasMessages ? 1 : 0) + (hasTrigger ? 1 : 0) === 1;
+
+    return Boolean(hasAgent && hasTools && hasServers && hasExactlyOne);
   }
 
   /**

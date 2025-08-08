@@ -125,6 +125,55 @@ const jwtConfig: JWTMiddlewareConfig = {
 const server = new HttpAgentServer(3000, '/agent', jwtConfig);
 ```
 
+> Important: The built-in server JWT middleware uses a SimpleJWTVerifier that does not verify cryptographic signatures. It only decodes and checks token shape/claims. Do not rely on it for production security.
+
+### Production Guidance
+
+- Use a production-grade library such as `jsonwebtoken` (HS256/RS256) or a JWKS-based verifier.
+- Prefer asymmetric algorithms (RS256/ES256) and validate issuer/audience/exp/nbf.
+- Rotate secrets/keys and fetch signing keys from your IdP (e.g., via JWKS).
+
+#### Example: `jsonwebtoken`-backed middleware (recommended)
+
+```typescript
+import jwt from 'jsonwebtoken';
+import type { Request, Response, NextFunction } from 'express';
+import { HttpAgentServer } from '@cubicler/cubicagentkit';
+import type { JWTRequest } from '@cubicler/cubicagentkit/dist/auth/jwt-middleware';
+
+const publicKey = process.env.JWT_PUBLIC_KEY!; // or fetch via JWKS
+
+function bearer(req: Request): string | undefined {
+  const h = req.headers.authorization;
+  return h?.startsWith('Bearer ') ? h.slice(7) : undefined;
+}
+
+function productionJWT(req: JWTRequest, res: Response, next: NextFunction) {
+  try {
+    const token = bearer(req);
+    if (!token) return res.status(401).json({ error: 'missing_token' });
+
+    const payload = jwt.verify(token, publicKey, {
+      algorithms: ['RS256'],
+      issuer: 'https://auth.example.com',
+      audience: 'cubicler-agents'
+    });
+
+    req.jwt = payload as any;
+    req.user = payload as any;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+}
+
+// Use your own middleware instead of the built-in one
+const server = new HttpAgentServer(3000, '/agent');
+server.useMiddleware(productionJWT);
+```
+
+For RS256 with rotating keys, use a JWKS helper (e.g., `jwks-rsa`) to resolve signing keys dynamically and cache them.
+
 ### Optional Authentication
 
 Allow requests with or without JWT:

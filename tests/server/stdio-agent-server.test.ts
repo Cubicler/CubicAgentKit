@@ -195,6 +195,35 @@ describe('StdioAgentServer', () => {
       });
     });
 
+    it('should handle trigger-only agent request', async () => {
+      const triggerRequest = {
+        agent: {
+          identifier: 'agent-1', name: 'a', description: 'd', prompt: 'p'
+        },
+        tools: [],
+        servers: [],
+        trigger: {
+          type: 'webhook', identifier: 't1', name: 'n', description: 'd', triggeredAt: '2024-01-01T00:00:00.000Z', payload: { a: 1 }
+        }
+      };
+
+      const dispatchRequest: MCPRequest = {
+        jsonrpc: '2.0',
+        method: 'agent/dispatch',
+        params: triggerRequest as any,
+        id: 9
+      };
+
+      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(mockHandler).toHaveBeenCalledWith(triggerRequest);
+      expect(mockWrittenData).toHaveLength(1);
+      const response = JSON.parse(mockWrittenData[0]!);
+      expect(response.id).toBe(9);
+      expect(response.result).toBeDefined();
+    });
+
     it('should handle unknown method with error', async () => {
       const unknownRequest: MCPRequest = {
         jsonrpc: '2.0',

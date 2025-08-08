@@ -11,5 +11,5 @@ export default defineConfig({
   splitting: false,
   bundle: true,
   minify: false,
-  external: ['express', 'axios']
+  external: ['express', 'axios', 'better-sqlite3', 'eventsource']
 });

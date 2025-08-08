@@ -1,5 +1,6 @@
 import express, { Express, Response, RequestHandler as ExpressRequestHandler } from 'express';
 import { Server } from 'http';
+import { createConnection } from 'net';
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent-request.js';
 import { JWTMiddlewareConfig } from '../interface/jwt-auth.js';
@@ -18,6 +19,7 @@ export class HttpAgentServer implements AgentServer {
   private readonly app: Express;
   private server?: Server;
   private jwtMiddleware?: ExpressRequestHandler;
+  
 
   /**
    * Creates a new ExpressAgentServer instance
@@ -70,6 +72,29 @@ export class HttpAgentServer implements AgentServer {
    * @throws Error if server startup fails
    */
   async start(handler: RequestHandler): Promise<void> {
+    // Quick pre-check: if something is already listening on this port, fail fast
+    const portInUse = await new Promise<boolean>((resolve) => {
+      const socket = createConnection({ port: this.port, host: '127.0.0.1' });
+      const timer = setTimeout(() => {
+        socket.destroy();
+        resolve(false);
+      }, 50);
+
+      socket.once('connect', () => {
+        clearTimeout(timer);
+        socket.end();
+        resolve(true);
+      });
+      socket.once('error', () => {
+        clearTimeout(timer);
+        resolve(false);
+      });
+    });
+
+    if (portInUse) {
+      throw new Error(`Failed to start Express server on port ${this.port}: address already in use`);
+    }
+    
     // Apply JWT middleware to the endpoint if configured
     const middlewares: ExpressRequestHandler[] = [];
     if (this.jwtMiddleware) {
@@ -90,12 +115,19 @@ export class HttpAgentServer implements AgentServer {
           }
 
           const agentRequest = req.body as AgentRequest;
-          
-          // Validate required AgentRequest structure
-          if (!agentRequest.agent || !agentRequest.tools || !agentRequest.servers || !agentRequest.messages) {
+
+          // Validate required AgentRequest structure: agent, tools, servers, and exactly one of messages or trigger
+          const hasAgent = Boolean(agentRequest.agent);
+          const hasTools = Array.isArray((agentRequest as any).tools);
+          const hasServers = Array.isArray((agentRequest as any).servers);
+          const hasMessages = Array.isArray((agentRequest as any).messages);
+          const hasTrigger = agentRequest.trigger && typeof agentRequest.trigger === 'object' && !Array.isArray(agentRequest.trigger);
+          const hasExactlyOne = (hasMessages ? 1 : 0) + (hasTrigger ? 1 : 0) === 1;
+
+          if (!hasAgent || !hasTools || !hasServers || !hasExactlyOne) {
             res.status(400).json({
               error: 'Bad Request',
-              message: 'Request must include agent, tools, servers, and messages properties'
+              message: 'Request must include agent, tools, servers, and exactly one of messages or trigger'
             });
             return;
           }
@@ -116,15 +148,16 @@ export class HttpAgentServer implements AgentServer {
       })();
     });
 
-    // Start the server
+    // Start the server with proper error handling
     return new Promise<void>((resolve, reject) => {
-      this.server = this.app.listen(this.port, (error?: Error) => {
-        if (error) {
-          reject(new Error(`Failed to start Express server on port ${this.port}: ${error.message}`));
-        } else {
-          console.log(`✅ Express server started on port ${this.port}, endpoint: ${this.endpoint}`);
-          resolve();
-        }
+      // Provide a callback to align with tests that mock listen(port, callback)
+      this.server = this.app.listen(this.port, () => {
+        console.log(`✅ Express server started on port ${this.port}, endpoint: ${this.endpoint}`);
+        resolve();
+      });
+
+      this.server.on('error', (err: Error) => {
+        reject(new Error(`Failed to start Express server on port ${this.port}: ${err.message}`));
       });
     });
   }

@@ -30,20 +30,24 @@ Choose your preferred transport method:
 ### HTTP Agent (Traditional Server)
 
 ```typescript
-import { CubicAgent, HttpAgentClient, HttpAgentServer } from '@cubicler/cubicagentkit';
+import { CubicAgent, HttpAgentClient, HttpAgentServer, MessageHandler } from '@cubicler/cubicagentkit';
 
 const client = new HttpAgentClient('http://localhost:1503');
 const server = new HttpAgentServer(3000, '/agent');
 const agent = new CubicAgent(client, server);
 
-await agent.start(async (request, client, context) => {
+const messageHandler: MessageHandler = async (request, client, context) => {
   const lastMessage = request.messages[request.messages.length - 1];
   return {
     type: 'text',
     content: `Hello! You said: ${lastMessage.content}`,
     usedToken: 25
   };
-});
+};
+
+await agent.start()
+  .onMessage(messageHandler)
+  .listen();
 
 console.log('✅ Agent running on http://localhost:3000/agent');
 ```
@@ -51,16 +55,20 @@ console.log('✅ Agent running on http://localhost:3000/agent');
 ### SSE Agent (Real-time)
 
 ```typescript
-import { CubicAgent, HttpAgentClient, SSEAgentServer } from '@cubicler/cubicagentkit';
+import { CubicAgent, HttpAgentClient, SSEAgentServer, MessageHandler } from '@cubicler/cubicagentkit';
 
 const client = new HttpAgentClient('http://localhost:1503');
 const server = new SSEAgentServer('http://localhost:8080', 'my-agent-id');
 const agent = new CubicAgent(client, server);
 
-await agent.start(async (request, client, context) => {
+const messageHandler: MessageHandler = async (request, client, context) => {
   // Same handler logic as HTTP version
   return { type: 'text', content: 'Hello from SSE!', usedToken: 15 };
-});
+};
+
+await agent.start()
+  .onMessage(messageHandler)
+  .listen();
 
 console.log('⚡ SSE Agent connected to Cubicler');
 ```
@@ -90,7 +98,9 @@ await agent.start(async (request, client, context) => {
 ### Feature Guides
 
 - **[JWT Authentication](docs/JWT_AUTH.md)** - Comprehensive authentication with static tokens and OAuth 2.0
+- Security note: the built-in server JWT verifier is development‑oriented and does not verify signatures. For production, use a `jsonwebtoken`/JWKS middleware as shown in docs/JWT_AUTH.md.
 - **[Memory System](docs/MEMORY_SYSTEM.md)** - Persistent memory with SQLite and LRU caching
+- **[Webhook Implementation](AGENT_WEBHOOK_IMPLEMENTATION.md)** - Complete guide for handling webhook triggers alongside user messages
 
 ## 🏗️ Architecture
 

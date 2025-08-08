@@ -218,6 +218,35 @@ describe('HttpAgentServer', () => {
       expect(mockHandler).toHaveBeenCalledWith(validRequest);
     });
 
+    it('should handle trigger-only agent request', async () => {
+      const mockResponse: AgentResponse = {
+        timestamp: '2023-01-01T00:00:00.000Z',
+        type: 'text',
+        content: 'Triggered',
+        metadata: { usedToken: 0, usedTools: 0 }
+      };
+      (mockHandler as any).mockResolvedValue(mockResponse);
+
+      const triggerRequest: AgentRequest = {
+        agent: createMockAgentInfo(),
+        tools: [],
+        servers: [],
+        trigger: {
+          type: 'webhook',
+          identifier: 'id-1',
+          name: 'test',
+          description: 'desc',
+          triggeredAt: '2024-01-01T00:00:00.000Z',
+          payload: { ok: true }
+        }
+      };
+
+      const response = await axios.post(`http://localhost:${testPort}/agent`, triggerRequest);
+      expect(response.status).toBe(200);
+      expect(response.data).toEqual(mockResponse);
+      expect(mockHandler).toHaveBeenCalledWith(triggerRequest);
+    });
+
     it('should return 400 for invalid JSON', async () => {
       try {
         await axios.post(`http://localhost:${testPort}/agent`, 'invalid json', {
@@ -240,7 +269,7 @@ describe('HttpAgentServer', () => {
         await axios.post(`http://localhost:${testPort}/agent`, invalidRequest);
       } catch (error: any) {
         expect(error.response.status).toBe(400);
-        expect(error.response.data.message).toContain('agent, tools, servers, and messages');
+        expect(error.response.data.message).toContain('agent, tools, servers, and exactly one of messages or trigger');
       }
     });
 
@@ -255,7 +284,7 @@ describe('HttpAgentServer', () => {
         await axios.post(`http://localhost:${testPort}/agent`, invalidRequest);
       } catch (error: any) {
         expect(error.response?.status).toBe(400);
-        expect(error.response?.data.message).toContain('agent, tools, servers, and messages');
+        expect(error.response?.data.message).toContain('agent, tools, servers, and exactly one of messages or trigger');
       }
     });
 
@@ -270,7 +299,7 @@ describe('HttpAgentServer', () => {
         await axios.post(`http://localhost:${testPort}/agent`, invalidRequest);
       } catch (error: any) {
         expect(error.response.status).toBe(400);
-        expect(error.response.data.message).toContain('agent, tools, servers, and messages');
+        expect(error.response.data.message).toContain('agent, tools, servers, and exactly one of messages or trigger');
       }
     });
 
@@ -285,7 +314,7 @@ describe('HttpAgentServer', () => {
         await axios.post(`http://localhost:${testPort}/agent`, invalidRequest);
       } catch (error: any) {
         expect(error.response?.status).toBe(400);
-        expect(error.response?.data.message).toContain('agent, tools, servers, and messages');
+        expect(error.response?.data.message).toContain('agent, tools, servers, and exactly one of messages or trigger');
       }
     });
 

@@ -1,5 +1,5 @@
-import { AgentClient } from '../interface/agent-client';
-import { JSONObject, JSONValue } from '../model/types';
+import { AgentClient } from '../interface/agent-client.js';
+import type { JSONObject, JSONValue } from '../model/types.js';
 
 /**
  * Wrapper class that tracks tool calls for an AgentClient
