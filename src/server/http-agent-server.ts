@@ -2,7 +2,7 @@ import express, { Express, Response, RequestHandler as ExpressRequestHandler } f
 import { Server } from 'http';
 import { createConnection } from 'net';
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
-import { AgentRequest } from '../model/agent-request.js';
+import { AgentRequest } from '../model/agent.js';
 import { JWTMiddlewareConfig } from '../interface/jwt-auth.js';
 import { createJWTMiddleware, createOptionalJWTMiddleware, JWTRequest } from '../auth/jwt-middleware.js';
 

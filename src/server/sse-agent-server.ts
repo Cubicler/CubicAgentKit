@@ -4,8 +4,8 @@ import axios, { AxiosInstance } from 'axios';
 type SSEMessageEvent = { data: string };
 
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
-import { AgentRequest } from '../model/agent-request.js';
-import { AgentResponse } from '../model/agent-response.js';
+import { AgentRequest } from '../model/agent.js';
+import { AgentResponse } from "../model/agent.js";
 import { JWTAuthConfig, JWTAuthProvider } from '../interface/jwt-auth.js';
 import { createJWTAuthProvider } from '../auth/jwt-auth-provider.js';
 
