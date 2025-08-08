@@ -37,8 +37,7 @@ export type { PersistentMemory } from './interface/persistent-memory.js';
 export type { ShortTermMemory } from './interface/short-term-memory.js';
 
 // Model types
-export type { AgentRequest, MessageRequest, TriggerRequest } from './model/agent-request.js';
-export type { AgentResponse, RawAgentResponse } from './model/agent-response.js';
+export type { AgentRequest, MessageRequest, TriggerRequest, RawAgentResponse, AgentResponse } from './model/agent.js';
 export type { 
   JSONValue, 
   JSONObject, 
@@ -51,15 +50,15 @@ export type {
 } from './model/types.js';
 export type { MCPRequest, MCPResponse, MCPError, MCPToolCall } from './model/mcp.js';
 
-// Stdio types
-export type { StdioMessage } from './client/stdio-agent-client.js';
-
-// Memory types (sentence-based)
-export type {
-  MemoryConfig,
-  MemoryItem,
-  MemoryStats
-} from './model/memory.js';
+// Logger utilities
+export type { Logger } from './utils/logger.js';
+export { 
+  ConsoleLogger, 
+  SilentLogger, 
+  createStdioLogger, 
+  createHttpLogger, 
+  createLogger 
+} from './utils/logger.js';
 
 // Middleware types
 export type { RequestMiddleware } from './client/http-agent-client.js';
