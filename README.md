@@ -1,7 +1,20 @@
 # CubicAgentKit
 
 [![npm version](https://badge.fury.io/js/@cubicler%2Fcubicagentkit.svg)](https://badge.fury.io/js/@cubicler%2Fcubicagentkit)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
+[!## 🎯 Recent Updates
+
+**v2.6.0** - Major Architecture Improvements:
+
+- **🔄 JSON-RPC 2.0 Protocol**: Stdio transport now uses standard JSON-RPC 2.0 for all communication
+- **📁 Unified Models**: Consolidated agent request/response types into single `agent.ts` model file
+- **📝 Logger Infrastructure**: Added comprehensive logging system with transport-specific behavior
+- **🏗️ Builder Pattern**: Enhanced fluent API for agent configuration with `start().onMessage().onTrigger().listen()`
+- **🛡️ Type Safety**: Improved TypeScript support with stricter typing and better error handling
+
+All changes maintain full backward compatibility while improving code organization and protocol standardization.
+
+## 🏗️ Architecturehttps://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](<https://www.typescriptlang.org/>)
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A modern Node.js library for creating AI agents that integrate seamlessly with **Cubicler 2.6**. Built with TypeScript, composition patterns, and dependency injection for maximum flexibility and testability.
@@ -145,6 +158,7 @@ Configure in Cubicler's `agents.json`:
 ## � Recent Updates
 
 **v2.6.0** - Major Architecture Improvements:
+
 - **🔄 JSON-RPC 2.0 Protocol**: Stdio transport now uses standard JSON-RPC 2.0 for all communication
 - **📁 Unified Models**: Consolidated agent request/response types into single `agent.ts` model file
 - **📝 Logger Infrastructure**: Added comprehensive logging system with transport-specific behavior
