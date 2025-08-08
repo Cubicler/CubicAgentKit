@@ -1,5 +1,5 @@
 import { AgentBuilder, MessageHandler, TriggerHandler, DispatchHandler } from '../interface/agent-server';
-import { MessageRequest, TriggerRequest } from '../model/agent-request';
+import { MessageRequest, TriggerRequest } from '../model/agent';
 import { CubicAgent } from './cubic-agent';
 
 /**

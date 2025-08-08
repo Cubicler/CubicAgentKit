@@ -1,5 +1,5 @@
-import { AgentRequest, MessageRequest, TriggerRequest } from '../model/agent-request.js';
-import { AgentResponse, RawAgentResponse } from '../model/agent-response.js';
+import { AgentRequest, MessageRequest, TriggerRequest } from '../model/agent.js';
+import { AgentResponse, RawAgentResponse } from "../model/agent.js";
 import { AgentClient } from './agent-client.js';
 import { MemoryRepository } from './memory-repository.js';
 

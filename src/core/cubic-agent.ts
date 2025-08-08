@@ -2,8 +2,8 @@ import { AgentClient } from '../interface/agent-client.js';
 import { AgentServer, DispatchHandler, CallContext, AgentBuilder } from '../interface/agent-server.js';
 import { MemoryRepository } from '../interface/memory-repository.js';
 import { TrackingAgentClient } from '../client/tracking-agent-client.js';
-import { AgentRequest } from '../model/agent-request.js';
-import { AgentResponse } from '../model/agent-response.js';
+import { AgentRequest } from '../model/agent.js';
+import { AgentResponse } from "../model/agent.js";
 import { CubicAgentBuilder } from './cubic-agent-builder.js';
 
 /**
