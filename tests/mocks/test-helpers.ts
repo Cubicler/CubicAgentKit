@@ -1,5 +1,5 @@
-import { AgentRequest, MessageRequest, TriggerRequest } from '../../src/model/agent-request.js';
-import { RawAgentResponse, AgentResponse } from '../../src/model/agent-response.js';
+import { AgentRequest, MessageRequest, TriggerRequest } from '../../src/model/agent.js';
+import { RawAgentResponse, AgentResponse } from "../../src/model/agent.js";
 
 /**
  * Helper to create mock AgentRequest for testing
