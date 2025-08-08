@@ -63,7 +63,7 @@ describe('StdioAgentClient', () => {
   });
 
   describe('callTool', () => {
-    it('should send mcp_request and handle mcp_response', async () => {
+    it('should send JSON-RPC request and handle JSON-RPC response', async () => {
       // Get the data handler function
       const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
       expect(dataCall).toBeDefined();
@@ -72,43 +72,39 @@ describe('StdioAgentClient', () => {
       // Start the call
       const toolPromise = client.callTool('test-tool', { param: 'value' });
 
-      // Check that MCP request was sent
+      // Check that JSON-RPC request was sent
       expect(mockStdout.write).toHaveBeenCalledWith(
-        expect.stringContaining('"type":"mcp_request"')
+        expect.stringContaining('"jsonrpc":"2.0"')
       );
 
       // Extract request ID from sent message
       const writeCall = mockStdout.write.mock.calls[0];
       expect(writeCall).toBeDefined();
       const sentMessage = JSON.parse(writeCall![0]);
-      expect(sentMessage.type).toBe('mcp_request');
-      expect(sentMessage.data.method).toBe('tools/call');
-      expect(sentMessage.data.params).toEqual({
+      expect(sentMessage.jsonrpc).toBe('2.0');
+      expect(sentMessage.method).toBe('tools/call');
+      expect(sentMessage.params).toEqual({
         name: 'test-tool',
         arguments: { param: 'value' }
       });
 
-      // Simulate MCP response
-      const mcpResponse = {
-        type: 'mcp_response',
+      // Simulate STDIO JSON-RPC response
+      const stdioResponse = {
+        jsonrpc: '2.0',
         id: sentMessage.id,
-        data: {
-          jsonrpc: '2.0',
-          id: 1,
-          result: { success: true }
-        }
+        result: { success: true }
       };
 
       // Send response after short delay
       setTimeout(() => {
-        dataHandler(JSON.stringify(mcpResponse) + '\n');
+        dataHandler(JSON.stringify(stdioResponse) + '\n');
       }, 10);
 
       const result = await toolPromise;
       expect(result).toEqual({ success: true });
     });
 
-    it('should handle MCP errors', async () => {
+    it('should handle JSON-RPC errors', async () => {
       const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
@@ -122,15 +118,11 @@ describe('StdioAgentClient', () => {
 
       // Simulate error response
       const errorResponse = {
-        type: 'mcp_response',
+        jsonrpc: '2.0',
         id: sentMessage.id,
-        data: {
-          jsonrpc: '2.0',
-          id: 1,
-          error: {
-            code: -1,
-            message: 'Tool failed'
-          }
+        error: {
+          code: -1,
+          message: 'Tool failed'
         }
       };
 
@@ -138,7 +130,7 @@ describe('StdioAgentClient', () => {
         dataHandler(JSON.stringify(errorResponse) + '\n');
       }, 10);
 
-      await expect(toolPromise).rejects.toThrow('MCP Error -1: Tool failed');
+      await expect(toolPromise).rejects.toThrow('JSON-RPC Error -1: Tool failed');
     });
 
     it('should handle timeout', async () => {
@@ -147,7 +139,7 @@ describe('StdioAgentClient', () => {
       global.setTimeout = ((fn: any) => fn()) as any;
 
       try {
-        await expect(client.callTool('timeout-tool', {})).rejects.toThrow('MCP request timeout');
+        await expect(client.callTool('timeout-tool', {})).rejects.toThrow('JSON-RPC request timeout');
       } finally {
         global.setTimeout = originalSetTimeout;
       }
@@ -164,8 +156,7 @@ describe('StdioAgentClient', () => {
 
       // Should not throw, just log error
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[StdioAgentClient]',
-        'Failed to parse MCP response:',
+        'Failed to parse JSON-RPC response:',
         'invalid json',
         expect.any(Error)
       );
@@ -175,40 +166,39 @@ describe('StdioAgentClient', () => {
   });
 
   describe('message handling', () => {
-    it('should ignore non-mcp_response messages', async () => {
+    it('should ignore non-JSON-RPC messages', async () => {
       const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
 
-      // Send agent_request message (should be ignored by client)
-      const agentRequest = {
-        type: 'agent_request',
+      // Send non-JSON-RPC message (should be ignored by client)
+      const regularMessage = {
+        type: 'some_other_message',
         data: { test: 'data' }
       };
 
-      dataHandler(JSON.stringify(agentRequest) + '\n');
+      dataHandler(JSON.stringify(regularMessage) + '\n');
 
       // Should not cause any errors or side effects
       await new Promise(resolve => setTimeout(resolve, 0));
     });
 
-    it('should handle unknown mcp_response IDs gracefully', async () => {
+    it('should handle unknown JSON-RPC response IDs gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
       expect(dataCall).toBeDefined();  
       const dataHandler = dataCall![1];
 
       const unknownResponse = {
-        type: 'mcp_response',
+        jsonrpc: '2.0',
         id: 'unknown-id',
-        data: { result: 'test' }
+        result: { test: 'data' }
       };
 
       dataHandler(JSON.stringify(unknownResponse) + '\n');
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[StdioAgentClient]',
-        'Received MCP response for unknown request ID:',
+        'Received JSON-RPC response for unknown request ID:',
         'unknown-id'
       );
 

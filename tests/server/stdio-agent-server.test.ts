@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StdioAgentServer } from '../../src/server/stdio-agent-server.js';
-import { AgentRequest } from '../../src/model/agent-request.js';
-import { AgentResponse } from '../../src/model/agent-response.js';
+import { AgentRequest } from '../../src/model/agent.js';
+import { AgentResponse } from "../../src/model/agent.js";
 import { RequestHandler } from '../../src/interface/agent-server.js';
 
 // Mock process.stdin and process.stdout
@@ -95,7 +95,7 @@ describe('StdioAgentServer', () => {
   });
 
   describe('message handling', () => {
-    it('should handle agent_request messages', async () => {
+    it('should handle JSON-RPC agent requests', async () => {
       const mockResponse: AgentResponse = {
         timestamp: '2023-01-01T00:00:00.000Z',
         type: 'text',
@@ -111,7 +111,7 @@ describe('StdioAgentServer', () => {
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
 
-      // Simulate receiving an agent request
+      // Simulate receiving a JSON-RPC request
       const agentRequest: AgentRequest = {
         agent: {
           identifier: 'test-agent',
@@ -130,13 +130,15 @@ describe('StdioAgentServer', () => {
         ]
       };
 
-      const requestMessage = {
-        type: 'agent_request',
-        data: agentRequest
+      const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'dispatch',
+        params: agentRequest
       };
 
       // Simulate stdin data
-      dataHandler(JSON.stringify(requestMessage) + '\n');
+      dataHandler(JSON.stringify(jsonRpcRequest) + '\n');
 
       // Wait for async processing
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -147,8 +149,9 @@ describe('StdioAgentServer', () => {
       // Verify response was sent
       expect(mockStdout.write).toHaveBeenCalledWith(
         JSON.stringify({
-          type: 'agent_response',
-          data: mockResponse
+          jsonrpc: '2.0',
+          id: 1,
+          result: mockResponse
         }) + '\n'
       );
     });
@@ -175,23 +178,31 @@ describe('StdioAgentServer', () => {
         ]
       };
 
-      const requestMessage = {
-        type: 'agent_request',
-        data: agentRequest
+      const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'dispatch',
+        params: agentRequest
       };
 
-      dataHandler(JSON.stringify(requestMessage) + '\n');
+      dataHandler(JSON.stringify(jsonRpcRequest) + '\n');
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      // Should send error response
+      // Should send JSON-RPC error response
       expect(mockStdout.write).toHaveBeenCalledWith(
-        expect.stringContaining('"content":"Error: Handler failed"')
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          error: {
+            code: -32000,
+            message: 'Handler failed'
+          }
+        }) + '\n'
       );
     });
 
     it('should handle malformed JSON gracefully', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const handler: RequestHandler = vi.fn();
       
       await server.start(handler);
@@ -208,18 +219,10 @@ describe('StdioAgentServer', () => {
       // Should not call handler
       expect(handler).not.toHaveBeenCalled();
       
-      // Should log error
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[StdioAgentServer]',
-        'Failed to parse message:',
-        'invalid json',
-        expect.any(Error)
-      );
-
-      consoleErrorSpy.mockRestore();
+      // Should silently ignore malformed JSON (no error logged)
     });
 
-    it('should ignore non-agent_request messages', async () => {
+    it('should ignore non-JSON-RPC messages', async () => {
       const handler: RequestHandler = vi.fn();
       await server.start(handler);
 
@@ -227,14 +230,13 @@ describe('StdioAgentServer', () => {
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
 
-      // Send mcp_response message (should be ignored by server)
-      const mcpResponse = {
-        type: 'mcp_response',
-        id: 'test-id',
+      // Send non-JSON-RPC message (should be ignored by server)
+      const nonJsonRpcMessage = {
+        type: 'some_other_message',
         data: { result: 'test' }
       };
 
-      dataHandler(JSON.stringify(mcpResponse) + '\n');
+      dataHandler(JSON.stringify(nonJsonRpcMessage) + '\n');
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -245,12 +247,12 @@ describe('StdioAgentServer', () => {
     it('should handle missing handler gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       
-      // Start without handler (this shouldn't happen in normal usage)
+      // Start server and then remove handler (this shouldn't happen in normal usage)
       const server = new StdioAgentServer();
       (server as any).isRunning = true;
       (server as any).handler = null;
 
-      // Directly call handleAgentRequest
+      // Simulate JSON-RPC request
       const agentRequest: AgentRequest = {
         agent: {
           identifier: 'test-agent',
@@ -263,11 +265,26 @@ describe('StdioAgentServer', () => {
         messages: []
       };
 
-      await (server as any).handleAgentRequest(agentRequest);
+      const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'dispatch',
+        params: agentRequest
+      };
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[StdioAgentServer]',
-        'No handler registered for agent requests'
+      // Process message directly
+      await (server as any).handleJsonRpcRequest(jsonRpcRequest);
+
+      // Should send JSON-RPC error response
+      expect(mockStdout.write).toHaveBeenCalledWith(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          error: {
+            code: -32603,
+            message: 'No handler registered for agent requests'
+          }
+        }) + '\n'
       );
 
       consoleErrorSpy.mockRestore();
@@ -289,9 +306,11 @@ describe('StdioAgentServer', () => {
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
 
-      const agentRequest = {
-        type: 'agent_request',
-        data: {
+      const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'dispatch',
+        params: {
           agent: {
             identifier: 'test-agent',
             name: 'Test Agent',
@@ -306,7 +325,7 @@ describe('StdioAgentServer', () => {
         }
       };
 
-      const fullMessage = JSON.stringify(agentRequest) + '\n';
+      const fullMessage = JSON.stringify(jsonRpcRequest) + '\n';
       
       // Send message in two parts
       dataHandler(fullMessage.substring(0, 10));
@@ -332,9 +351,11 @@ describe('StdioAgentServer', () => {
       expect(dataCall).toBeDefined();
       const dataHandler = dataCall![1];
 
-      const agentRequest = {
-        type: 'agent_request',
-        data: {
+      const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'dispatch',
+        params: {
           agent: {
             identifier: 'test-agent',
             name: 'Test Agent',
@@ -350,8 +371,8 @@ describe('StdioAgentServer', () => {
       };
 
       // Send two messages in one chunk
-      const message1 = JSON.stringify(agentRequest) + '\n';
-      const message2 = JSON.stringify(agentRequest) + '\n';
+      const message1 = JSON.stringify(jsonRpcRequest) + '\n';
+      const message2 = JSON.stringify({ ...jsonRpcRequest, id: 2 }) + '\n';
       
       dataHandler(message1 + message2);
 
