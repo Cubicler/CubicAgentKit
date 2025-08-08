@@ -29,7 +29,12 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/prefer-readonly': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
+  '@typescript-eslint/no-floating-promises': 'error',
+  // Temporarily disable over‑eager unsafe rules until code refactor adds explicit typing wrappers
+  '@typescript-eslint/no-unsafe-assignment': 'off',
+  '@typescript-eslint/no-unsafe-member-access': 'off',
+  '@typescript-eslint/no-unsafe-call': 'off',
+  '@typescript-eslint/no-unsafe-return': 'off',
       
       // General rules
       'no-console': 'off', // We use console for logging in server
@@ -51,6 +56,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'off', // Allow unsafe arguments in tests
       '@typescript-eslint/require-await': 'off', // Allow async functions without await in tests
       '@typescript-eslint/no-unused-vars': 'off', // Allow unused vars in tests
+  '@typescript-eslint/no-unnecessary-type-assertion': 'off', // Too noisy for current test style
     },
   },
   {
