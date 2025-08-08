@@ -105,7 +105,7 @@ describe('SSEAgentServer with JWT Authentication', () => {
       await sendResponse(mockResponse, 'test-request-123');
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/sse/test-agent/response',
+        '/sse/test-agent',
         {
           requestId: 'test-request-123',
           response: mockResponse
@@ -148,7 +148,7 @@ describe('SSEAgentServer with JWT Authentication', () => {
 
       // Should continue without auth headers
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/sse/test-agent/response',
+        '/sse/test-agent',
         {
           requestId: 'test-request-123',
           response: mockResponse

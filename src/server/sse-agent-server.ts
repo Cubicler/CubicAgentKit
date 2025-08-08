@@ -101,68 +101,70 @@ export class SSEAgentServer implements AgentServer {
     
     const eventSourceOptions = await prepareEventSourceOptions();
     
-    return new Promise<void>(async (resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       let resolved = false;
-      
-      try {
-        const mod = await import('eventsource');
-        const EventSourceCtor: any = (mod as any).EventSource || (mod as any).default || mod;
-        this.eventSource = new EventSourceCtor(sseUrl, eventSourceOptions);
 
-        this.eventSource!.onopen = () => {
-          if (!resolved) {
-            resolved = true;
-            console.log(`✅ SSE connection established to ${sseUrl}`);
-            resolve();
-          }
-        };
+      void (async () => {
+        try {
+          const mod = await import('eventsource');
+          const EventSourceCtor: any = (mod as any).EventSource || (mod as any).default || mod;
+          this.eventSource = new EventSourceCtor(sseUrl, eventSourceOptions);
 
-        this.eventSource!.onmessage = (event: SSEMessageEvent) => {
-          void this.handleSSEMessage(event);
-        };
+          this.eventSource!.onopen = () => {
+            if (!resolved) {
+              resolved = true;
+              console.log(`✅ SSE connection established to ${sseUrl}`);
+              resolve();
+            }
+          };
 
-        this.eventSource!.onerror = (error: any) => {
-          console.error('SSE connection error:', error);
-          if (!this.isRunning) {
-            // If we're stopping, don't treat this as an error
-            return;
-          }
-          
+          this.eventSource!.onmessage = (event: SSEMessageEvent) => {
+            void this.handleSSEMessage(event);
+          };
+
+          this.eventSource!.onerror = (error: any) => {
+            console.error('SSE connection error:', error);
+            if (!this.isRunning) {
+              // If we're stopping, don't treat this as an error
+              return;
+            }
+
+            if (!resolved) {
+              resolved = true;
+              this.isRunning = false;
+              reject(new Error(`SSE connection failed: ${error?.message || 'Connection error'}`));
+              return;
+            }
+
+            if (this.eventSource?.readyState === 2) {
+              // EventSource.CLOSED - Connection was closed, try to reconnect after a delay
+              setTimeout(() => {
+                if (this.isRunning && this.handler) {
+                  console.log('Attempting to reconnect to SSE...');
+                  void this.start(this.handler);
+                }
+              }, 5000);
+            }
+          };
+
+          // Set a timeout for the initial connection
+          setTimeout(() => {
+            if (!resolved && this.eventSource?.readyState !== 1) {
+              // EventSource.OPEN
+              resolved = true;
+              this.eventSource?.close();
+              this.isRunning = false;
+              reject(new Error(`Failed to establish SSE connection to ${sseUrl} within timeout`));
+            }
+          }, this.timeout);
+        } catch (error) {
           if (!resolved) {
             resolved = true;
             this.isRunning = false;
-            reject(new Error(`SSE connection failed: ${error?.message || 'Connection error'}`));
-            return;
+            reject(new Error(`Failed to start SSE server: ${error instanceof Error ? error.message : 'Unknown error'}`));
           }
-          
-          if (this.eventSource?.readyState === 2) { // EventSource.CLOSED
-            // Connection was closed, try to reconnect after a delay
-            setTimeout(() => {
-              if (this.isRunning && this.handler) {
-                console.log('Attempting to reconnect to SSE...');
-                void this.start(this.handler);
-              }
-            }, 5000);
-          }
-        };
-
-        // Set a timeout for the initial connection
-        setTimeout(() => {
-          if (!resolved && this.eventSource?.readyState !== 1) { // EventSource.OPEN
-            resolved = true;
-            this.eventSource?.close();
-            this.isRunning = false;
-            reject(new Error(`Failed to establish SSE connection to ${sseUrl} within timeout`));
-          }
-        }, this.timeout);
-
-      } catch (error) {
-        if (!resolved) {
-          resolved = true;
-          this.isRunning = false;
-          reject(new Error(`Failed to start SSE server: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
-      }
+      })();
     });
   }
 
@@ -178,7 +180,7 @@ export class SSEAgentServer implements AgentServer {
 
     try {
       // Parse the incoming message as an SSEMessage
-      const data: unknown = JSON.parse(event.data as string);
+      const data: unknown = JSON.parse(event.data);
       
       // Validate the request structure
       if (!this.isValidSSEMessage(data)) {
@@ -205,7 +207,7 @@ export class SSEAgentServer implements AgentServer {
         // Try to extract the ID from the parsed data if possible
         let requestId = 'unknown';
         try {
-          const data: unknown = JSON.parse(event.data as string);
+          const data: unknown = JSON.parse(event.data);
           if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'string') {
             requestId = data.id;
           }
@@ -260,7 +262,9 @@ export class SSEAgentServer implements AgentServer {
    * @private
    */
   private async sendResponse(response: AgentResponse, requestId: string): Promise<void> {
-    const responseUrl = `/sse/${this.agentId}/response`;
+    // Post back to the same SSE endpoint path (resource-based):
+    // GET subscribes to `/sse/:agentId`, POST sends the response to `/sse/:agentId`
+    const responseUrl = `/sse/${this.agentId}`;
     
     // Format the response according to SSE spec: { requestId: string, response: {...} }
     const sseResponse = {

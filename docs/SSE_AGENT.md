@@ -2,6 +2,8 @@
 
 Server-Sent Events (SSE) agents provide real-time, push-based communication with Cubicler. Unlike HTTP agents that host their own server, SSE agents connect to Cubicler's SSE endpoint and receive requests as server-sent events.
 
+Response delivery follows a resource-based pattern: the agent subscribes with `GET /sse/:agentId` and sends responses back with `POST /sse/:agentId` (same path, different method). This aligns with common SSE MCP conventions.
+
 ## Quick Start
 
 ```typescript

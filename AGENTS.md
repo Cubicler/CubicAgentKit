@@ -49,3 +49,13 @@
 - APIs: use current classes from `src/` — `HttpAgentClient`/`HttpAgentServer`, `SSEAgentServer`, `StdioAgentClient`/`StdioAgentServer`.
 - Memory: follow factory-based setup in `src/memory/`; keep persistence in SQLite and short-term in LRU; add tests when changing memory behavior.
 - Docs & tests: when public types or flows change, update `docs/` and mirror tests under `tests/`.
+
+## Engineering Principles
+
+- Architecture: contract-based, SOLID, and dependency inversion; avoid clever hacks.
+- Code: TypeScript-first with explicit types; prefer small, pure functions; justify any mutation.
+- Errors: never swallow; bubble via typed errors or a Result/Either style.
+- Tests: TDD-leaning; propose and add unit tests first (Vitest by default).
+- Docs: write short JSDoc for public functions; add an ADR note when changing architecture.
+- Security: validate inputs and sanitize external data; never commit secrets.
+- Git: make atomic commits with clear messages; show planned diff before writing.
