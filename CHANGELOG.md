@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2025-08-09
+
+### Added
+
+- **JSON-RPC 2.0 Protocol**: Stdio transport now uses standard JSON-RPC 2.0 for all communication instead of custom message types
+- **Consolidated Agent Models**: New unified `agent.ts` model file containing all agent request/response types (`AgentRequest`, `MessageRequest`, `TriggerRequest`, `RawAgentResponse`, `AgentResponse`)
+- **Logger Infrastructure**: Comprehensive logging system with `Logger` interface, `ConsoleLogger`, `SilentLogger`, and transport-specific utilities
+- **JSON-RPC Types**: New `stdio.ts` model with complete JSON-RPC 2.0 protocol structures (`STDIORequest`, `STDIOResponse`, `STDIODispatchRequest`, etc.)
+
+### Changed
+
+- **BREAKING: Stdio Protocol Migration**: StdioAgentClient and StdioAgentServer now use JSON-RPC 2.0 `dispatch` method instead of `agent_request/agent_response`
+- **Model Architecture**: Consolidated separate `agent-request.ts` and `agent-response.ts` files into unified `agent.ts` model
+- **Request ID System**: StdioAgentClient now uses incremental request IDs instead of UUIDs for better JSON-RPC compliance
+- **Logging Behavior**: Stdio transport uses `SilentLogger` to avoid polluting stdout, HTTP/SSE use `ConsoleLogger` with prefixes
+- **Import Paths**: All agent model imports now point to consolidated `model/agent.js` throughout the codebase
+- **Error Handling**: JSON-RPC 2.0 compliant error responses with proper error codes and messages
+
+### Fixed
+
+- **Failing Unit Tests**: Updated all stdio tests to expect JSON-RPC 2.0 format instead of custom message types
+- **Test Protocol**: Updated test expectations from `MCP Error` to `JSON-RPC Error` messages
+- **Integration Tests**: Updated all test imports to use consolidated agent models
+- **Mock Implementations**: Updated test helpers and mocks to use unified agent types
+
+### Documentation
+
+- **STDIO_AGENT.md**: Complete rewrite to document JSON-RPC 2.0 protocol with updated examples
+- **README.md**: Added "Recent Updates" section highlighting v2.6.0 architectural improvements
+- **Python Example**: Updated Python stdio agent example to use proper JSON-RPC 2.0 format
+- **Protocol Documentation**: Updated message protocol examples to show JSON-RPC request/response structure
+- **Manual Testing**: Updated testing commands to use JSON-RPC format instead of custom messages
+
+### Internal
+
+- **All 362 tests passing**: Complete test suite validation after major refactoring with no functionality lost
+- **Backward Compatibility**: Maintained API compatibility while improving internal architecture and protocol standardization
+- **Code Organization**: Removed duplicate model definitions and improved maintainability through consolidation
+- **Protocol Standardization**: Aligned stdio transport with industry-standard JSON-RPC 2.0 specification
+- Bumped version to 2.6.0
+
 ## [2.5.0] - 2025-08-09
 
 ### Added
