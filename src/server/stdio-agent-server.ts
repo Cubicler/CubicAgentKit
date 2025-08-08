@@ -1,33 +1,25 @@
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
-import { AgentRequest } from '../model/agent-request.js';
-import { AgentResponse } from '../model/agent-response.js';
-
-import { MCPRequest, MCPResponse } from '../model/mcp.js';
+import { STDIODispatchRequest, STDIODispatchResponse } from '../model/stdio.js';
+import { Logger, createStdioLogger } from '../utils/logger.js';
 
 /**
- * Message types used in stdio communication with Cubicler
- */
-export type StdioMessage =
-  | { type: 'agent_request'; data: AgentRequest }
-  | { type: 'agent_response'; data: AgentResponse }
-  | { type: 'mcp_request'; id: string; data: MCPRequest }
-  | { type: 'mcp_response'; id: string; data: MCPResponse };
-
-/**
- * Stdio implementation of AgentServer for handling requests from Cubicler
+ * Stdio implementation of AgentServer for handling JSON-RPC 2.0 requests from Cubicler
  * 
  * In the stdio protocol, Cubicler spawns this agent as a subprocess and sends
- * requests via stdin. The agent responds via stdout.
+ * JSON-RPC 2.0 requests via stdin. The agent responds with JSON-RPC 2.0 responses via stdout.
  */
 export class StdioAgentServer implements AgentServer {
   private handler: RequestHandler | null = null;
   private isRunning = false;
   private buffer = '';
+  private readonly logger: Logger;
 
   /**
    * Creates a new StdioAgentServer
    */
   constructor() {
+    this.logger = createStdioLogger();
+    
     // Set up graceful shutdown
     process.on('SIGINT', () => { void this.stop(); });
     process.on('SIGTERM', () => { void this.stop(); });
@@ -88,79 +80,88 @@ export class StdioAgentServer implements AgentServer {
     for (const line of lines) {
       if (line.trim()) {
         try {
-          const message = JSON.parse(line) as StdioMessage;
+          const message = JSON.parse(line) as STDIODispatchRequest | Record<string, unknown>;
           void this.handleMessage(message);
-        } catch (error) {
-          this.logError('Failed to parse message:', line, error);
+        } catch {
+          // Silently ignore non-JSON lines (like log messages)
         }
       }
     }
   }
 
   /**
-   * Handle a parsed stdio message
+   * Handle a parsed JSON-RPC message
    */
-  private async handleMessage(message: StdioMessage): Promise<void> {
+  private async handleMessage(message: STDIODispatchRequest | Record<string, unknown>): Promise<void> {
     try {
-      if (message.type === 'agent_request') {
-        await this.handleAgentRequest(message.data);
+      // Check if it's a valid JSON-RPC request
+      if ('jsonrpc' in message && message.jsonrpc === '2.0' && 'method' in message && message.method === 'dispatch') {
+        await this.handleJsonRpcRequest(message as STDIODispatchRequest);
       }
-      // Note: mcp_response messages are handled by StdioAgentClient
+      // Ignore other message types silently (like log output)
     } catch (error) {
-      this.logError('Error handling message:', error);
+      this.logger.error('Error handling message:', error);
     }
   }
 
   /**
-   * Handle an agent request from Cubicler
+   * Handle a JSON-RPC 2.0 request
    */
-  private async handleAgentRequest(request: AgentRequest): Promise<void> {
+  private async handleJsonRpcRequest(request: STDIODispatchRequest): Promise<void> {
     if (!this.handler) {
-      this.logError('No handler registered for agent requests');
+      this.sendJsonRpcError(request.id, -32603, 'No handler registered for agent requests');
       return;
     }
 
     try {
       // Process the request through the handler
-      const response = await this.handler(request);
+      const response = await this.handler(request.params);
 
-      // Send the response back to Cubicler
-      this.sendMessage({
-        type: 'agent_response',
-        data: response
+      // Send JSON-RPC success response
+      this.sendJsonRpcResponse({
+        jsonrpc: '2.0',
+        id: request.id,
+        result: response
       });
     } catch (error) {
-      this.logError('Error processing agent request:', error);
+      this.logger.error('Error processing JSON-RPC agent request:', error);
       
-      // Send error response
-      this.sendMessage({
-        type: 'agent_response',
-        data: {
-          timestamp: new Date().toISOString(),
-          type: 'text',
-          content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-          metadata: { usedToken: 0, usedTools: 0 }
-        }
-      });
+      // Send JSON-RPC error response
+      this.sendJsonRpcError(
+        request.id,
+        -32000,
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 
   /**
-   * Send a message to Cubicler via stdout
+   * Send a JSON-RPC 2.0 success response
    */
-  private sendMessage(message: StdioMessage): void {
+  private sendJsonRpcResponse(response: STDIODispatchResponse): void {
     if (!this.isRunning) {
       return;
     }
 
-    const messageStr = JSON.stringify(message) + '\n';
-    process.stdout.write(messageStr);
+    const responseStr = JSON.stringify(response) + '\n';
+    process.stdout.write(responseStr);
   }
 
   /**
-   * Log error messages to stderr (stdout is reserved for protocol messages)
+   * Send a JSON-RPC 2.0 error response
    */
-  private logError(...args: unknown[]): void {
-    console.error('[StdioAgentServer]', ...args);
+  private sendJsonRpcError(id: string | number, code: number, message: string, data?: unknown): void {
+    if (!this.isRunning) {
+      return;
+    }
+
+    const errorResponse: STDIODispatchResponse = {
+      jsonrpc: '2.0',
+      id,
+      error: { code, message, data }
+    };
+
+    const responseStr = JSON.stringify(errorResponse) + '\n';
+    process.stdout.write(responseStr);
   }
 }
