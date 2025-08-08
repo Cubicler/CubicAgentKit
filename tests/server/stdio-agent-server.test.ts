@@ -39,7 +39,14 @@ describe('StdioAgentServer', () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Stop the server if it's running to ensure clean state between tests
+    try {
+      await server.stop();
+    } catch (error) {
+      // Ignore errors if server wasn't running
+    }
+    
     // Restore original process streams
     Object.defineProperty(process, 'stdin', {
       value: originalStdin,
@@ -67,7 +74,7 @@ describe('StdioAgentServer', () => {
       
       await server.start(handler);
       
-      await expect(server.start(handler)).rejects.toThrow('StdioAgentServer is already running');
+      expect(() => server.start(handler)).toThrow('StdioAgentServer is already running');
     });
   });
 

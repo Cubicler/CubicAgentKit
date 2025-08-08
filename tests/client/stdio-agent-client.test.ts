@@ -20,6 +20,9 @@ describe('StdioAgentClient', () => {
   let client: StdioAgentClient;
 
   beforeEach(() => {
+    // Clear mocks first
+    vi.clearAllMocks();
+    
     // Replace process streams with mocks
     Object.defineProperty(process, 'stdin', {
       value: mockStdin,
@@ -30,8 +33,8 @@ describe('StdioAgentClient', () => {
       writable: true
     });
 
+    // Create client after mocks are set up
     client = new StdioAgentClient();
-    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -62,7 +65,9 @@ describe('StdioAgentClient', () => {
   describe('callTool', () => {
     it('should send mcp_request and handle mcp_response', async () => {
       // Get the data handler function
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Start the call
       const toolPromise = client.callTool('test-tool', { param: 'value' });
@@ -73,7 +78,9 @@ describe('StdioAgentClient', () => {
       );
 
       // Extract request ID from sent message
-      const sentMessage = JSON.parse(mockStdout.write.mock.calls[0][0]);
+      const writeCall = mockStdout.write.mock.calls[0];
+      expect(writeCall).toBeDefined();
+      const sentMessage = JSON.parse(writeCall![0]);
       expect(sentMessage.type).toBe('mcp_request');
       expect(sentMessage.data.method).toBe('tools/call');
       expect(sentMessage.data.params).toEqual({
@@ -102,12 +109,16 @@ describe('StdioAgentClient', () => {
     });
 
     it('should handle MCP errors', async () => {
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       const toolPromise = client.callTool('failing-tool', {});
 
       // Extract request ID
-      const sentMessage = JSON.parse(mockStdout.write.mock.calls[0][0]);
+      const writeCall = mockStdout.write.mock.calls[0];
+      expect(writeCall).toBeDefined();
+      const sentMessage = JSON.parse(writeCall![0]);
 
       // Simulate error response
       const errorResponse = {
@@ -144,7 +155,9 @@ describe('StdioAgentClient', () => {
 
     it('should handle malformed JSON gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Send malformed JSON
       dataHandler('invalid json\n');
@@ -163,7 +176,9 @@ describe('StdioAgentClient', () => {
 
   describe('message handling', () => {
     it('should ignore non-mcp_response messages', async () => {
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Send agent_request message (should be ignored by client)
       const agentRequest = {
@@ -179,7 +194,9 @@ describe('StdioAgentClient', () => {
 
     it('should handle unknown mcp_response IDs gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();  
+      const dataHandler = dataCall![1];
 
       const unknownResponse = {
         type: 'mcp_response',
