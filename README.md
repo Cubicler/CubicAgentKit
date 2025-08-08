@@ -14,7 +14,8 @@ A modern Node.js library for creating AI agents that integrate seamlessly with *
 - **🔐 JWT Authentication**: Complete JWT support with static tokens and OAuth 2.0 flows
 - **🧠 Memory System**: SQLite-based persistent memory with LRU short-term caching
 - **📊 Tool Call Tracking**: Automatic tracking of tool usage per request
-- **🛡️ Type-Safe**: Full TypeScript support with strict typing
+- **🛡️ Type-Safe**: Full TypeScript support with strict typing and consolidated model architecture
+- **📝 Smart Logging**: Transport-specific logging system (silent for stdio, console for HTTP/SSE)
 - **🔍 Error Transparent**: All errors thrown up to implementers for custom handling
 
 ## 📦 Installation
@@ -89,7 +90,7 @@ const agent = new CubicAgent(client, server);
 const messageHandler: MessageHandler = async (request, client, context) => {
   const lastMessage = request.messages[request.messages.length - 1];
   
-  // Make MCP calls back to Cubicler
+  // Make MCP calls back to Cubicler using JSON-RPC 2.0
   const weather = await client.callTool('weather_get_current', { city: 'Paris' });
   
   return {
@@ -99,7 +100,7 @@ const messageHandler: MessageHandler = async (request, client, context) => {
   };
 };
 
-await agent
+await agent.start()
   .onMessage(messageHandler)
   .onTrigger(async (request) => ({
     type: 'text',
@@ -132,7 +133,7 @@ Configure in Cubicler's `agents.json`:
 
 - **[HTTP Agent](docs/HTTP_AGENT.md)** - Traditional server deployment with HTTP endpoints
 - **[SSE Agent](docs/SSE_AGENT.md)** - Real-time communication via Server-Sent Events  
-- **[Stdio Agent](docs/STDIO_AGENT.md)** - Command-line and desktop application integration
+- **[Stdio Agent](docs/STDIO_AGENT.md)** - Command-line and subprocess integration with JSON-RPC 2.0 protocol
 
 ### Feature Guides
 
@@ -141,7 +142,16 @@ Configure in Cubicler's `agents.json`:
 - **[Memory System](docs/MEMORY_SYSTEM.md)** - Persistent memory with SQLite and LRU caching
 - **[Webhook Implementation](AGENT_WEBHOOK_IMPLEMENTATION.md)** - Complete guide for handling webhook triggers alongside user messages
 
-## 🏗️ Architecture
+## � Recent Updates
+
+**v2.5.0** - Major Architecture Improvements:
+- **🔄 JSON-RPC 2.0 Protocol**: Stdio transport now uses standard JSON-RPC 2.0 for all communication
+- **📁 Unified Models**: Consolidated agent request/response types into single `agent.ts` model file
+- **📝 Logger Infrastructure**: Added comprehensive logging system with transport-specific behavior
+- **�🏗️ Builder Pattern**: Enhanced fluent API for agent configuration with `start().onMessage().onTrigger().listen()`
+- **🛡️ Type Safety**: Improved TypeScript support with stricter typing and better error handling
+
+All changes maintain full backward compatibility while improving code organization and protocol standardization.
 
 CubicAgentKit follows a **composition-based architecture** with clean separation of concerns:
 
@@ -181,9 +191,9 @@ CubicAgentKit follows a **composition-based architecture** with clean separation
 
 - **`CubicAgent`**: Main orchestrator handling server lifecycle, request routing, and memory integration
 - **`HttpAgentClient`**: HTTP client implementing Cubicler's MCP protocol  
-- **`StdioAgentClient`**: Stdio client for CLI-based MCP communication
+- **`StdioAgentClient`**: Stdio client for CLI-based MCP communication using JSON-RPC 2.0
 - **`HttpAgentServer`**: HTTP server handling agent endpoint requests
-- **`StdioAgentServer`**: Stdio server for CLI-based agent communication
+- **`StdioAgentServer`**: Stdio server for CLI-based agent communication using JSON-RPC 2.0
 - **`SSEAgentServer`**: SSE client for real-time communication with Cubicler
 - **`AgentMemoryRepository`**: Two-tier memory system with persistent storage and LRU cache
 

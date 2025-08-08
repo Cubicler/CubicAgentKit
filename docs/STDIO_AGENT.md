@@ -7,11 +7,11 @@ Stdio (Standard Input/Output) agents implement the correct Cubicler stdio protoc
 In the correct stdio implementation:
 
 1. **Cubicler spawns your agent** as a subprocess (e.g., `node my-agent.js`)
-2. **Agent receives requests** from Cubicler via stdin (`agent_request`)
-3. **Agent can make MCP calls** back to Cubicler via stdout (`mcp_request/mcp_response`)
-4. **Agent sends responses** to Cubicler via stdout (`agent_response`)
+2. **Agent receives requests** from Cubicler via stdin using **JSON-RPC 2.0** (`dispatch` method)
+3. **Agent can make MCP calls** back to Cubicler via stdout using **JSON-RPC 2.0** (`tools/call` method)
+4. **Agent sends responses** to Cubicler via stdout using **JSON-RPC 2.0** responses
 
-This follows the bidirectional stdio protocol documented in the Cubicler integration guide.
+This follows the standard **JSON-RPC 2.0** protocol for bidirectional communication documented in the Cubicler integration guide.
 
 ## Uniform API Pattern
 
@@ -135,9 +135,10 @@ class StdioAgentClient implements AgentClient {
 ### Key Features
 
 - **No initialization** - Connection already established via Cubicler spawn
-- **MCP calls** - Sends `mcp_request` messages to Cubicler via stdout
-- **Response handling** - Listens for `mcp_response` messages on stdin
-- **Request correlation** - Uses UUIDs to match requests with responses
+- **JSON-RPC 2.0 MCP calls** - Sends standardized JSON-RPC requests to Cubicler via stdout
+- **Response handling** - Listens for JSON-RPC responses on stdin
+- **Request correlation** - Uses incremental request IDs to match requests with responses
+- **Silent logging** - Uses SilentLogger to avoid polluting stdout reserved for protocol
 
 ### Usage
 
@@ -162,10 +163,11 @@ class StdioAgentServer implements AgentServer {
 
 ### Key Features
 
-- **Request handling** - Receives `agent_request` messages from stdin
-- **Response sending** - Sends `agent_response` messages to stdout
+- **Request handling** - Receives JSON-RPC 2.0 `dispatch` method calls from stdin
+- **Response sending** - Sends JSON-RPC 2.0 responses to stdout
 - **Line buffering** - Properly handles partial JSON messages
-- **Error handling** - Graceful error responses
+- **Error handling** - Graceful JSON-RPC error responses
+- **Silent logging** - Uses SilentLogger to avoid polluting stdout reserved for protocol
 
 ### Usage
 
@@ -429,52 +431,49 @@ You can also implement stdio agents in other languages:
 #!/usr/bin/env python3
 import json
 import sys
-import uuid
 from datetime import datetime
 
 class StdioPythonAgent:
     def __init__(self):
-        self.pending_mcp_requests = {}
+        self.next_request_id = 1
 
-    def send_message(self, message):
+    def send_jsonrpc_message(self, message):
         json.dump(message, sys.stdout)
         sys.stdout.write('\n')
         sys.stdout.flush()
 
-    def read_message(self):
+    def read_jsonrpc_message(self):
         line = sys.stdin.readline()
         return json.loads(line.strip())
 
     def call_mcp_tool(self, tool_name, arguments):
-        request_id = str(uuid.uuid4())
+        request_id = self.next_request_id
+        self.next_request_id += 1
         
-        self.send_message({
-            "type": "mcp_request",
+        self.send_jsonrpc_message({
+            "jsonrpc": "2.0",
             "id": request_id,
-            "data": {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments}
-            }
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments}
         })
         
         # Wait for response
         while True:
-            message = self.read_message()
-            if message["type"] == "mcp_response" and message["id"] == request_id:
-                if "error" in message["data"]:
-                    raise Exception(f"MCP Error: {message['data']['error']['message']}")
-                return message["data"].get("result")
+            message = self.read_jsonrpc_message()
+            if message.get("jsonrpc") == "2.0" and message.get("id") == request_id:
+                if "error" in message:
+                    raise Exception(f"JSON-RPC Error: {message['error']['message']}")
+                return message.get("result")
 
     def run(self):
-        # Read initial agent request
-        initial_message = self.read_message()
-        if initial_message["type"] != "agent_request":
-            raise ValueError(f"Expected agent_request, got {initial_message['type']}")
+        # Read initial JSON-RPC dispatch request
+        initial_message = self.read_jsonrpc_message()
+        if initial_message.get("method") != "dispatch":
+            raise ValueError(f"Expected dispatch method, got {initial_message.get('method')}")
         
-        agent_data = initial_message["data"]
+        agent_data = initial_message["params"]
         messages = agent_data.get('messages', [])
+        request_id = initial_message["id"]
         
         if messages:
             last_message = messages[-1]['content']
@@ -494,10 +493,11 @@ class StdioPythonAgent:
             content = "No messages received"
             used_tools = 0
         
-        # Send response
-        self.send_message({
-            "type": "agent_response",
-            "data": {
+        # Send JSON-RPC response
+        self.send_jsonrpc_message({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
                 "timestamp": datetime.now().isoformat(),
                 "type": "text",
                 "content": content,
@@ -512,14 +512,16 @@ if __name__ == "__main__":
 
 ## Message Protocol
 
-### Input: agent_request
+### Input: JSON-RPC dispatch method
 
-Your agent receives this from Cubicler via stdin:
+Your agent receives this from Cubicler via stdin using JSON-RPC 2.0:
 
 ```json
 {
-  "type": "agent_request",
-  "data": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "dispatch",
+  "params": {
     "agent": {
       "identifier": "my_agent",
       "name": "My Agent",
@@ -539,14 +541,15 @@ Your agent receives this from Cubicler via stdin:
 }
 ```
 
-### Output: agent_response
+### Output: JSON-RPC response
 
 Your agent sends this to Cubicler via stdout:
 
 ```json
 {
-  "type": "agent_response",
-  "data": {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
     "timestamp": "2024-01-01T12:00:00.000Z",
     "type": "text",
     "content": "Hello! How can I help?",
@@ -558,37 +561,29 @@ Your agent sends this to Cubicler via stdout:
 }
 ```
 
-### MCP Calls: mcp_request/mcp_response
+### MCP Calls: JSON-RPC tools/call method
 
-To call tools, send mcp_request:
+To call tools, send JSON-RPC request:
 
 ```json
 {
-  "type": "mcp_request",
-  "id": "unique-uuid",
-  "data": {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/call",
-    "params": {
-      "name": "weather_get_current",
-      "arguments": {"city": "Paris"}
-    }
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "weather_get_current",
+    "arguments": {"city": "Paris"}
   }
 }
 ```
 
-Cubicler responds with mcp_response:
+Cubicler responds with JSON-RPC response:
 
 ```json
 {
-  "type": "mcp_response",
-  "id": "unique-uuid",
-  "data": {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {"temperature": "22°C", "condition": "sunny"}
-  }
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {"temperature": "22°C", "condition": "sunny"}
 }
 ```
 
@@ -630,11 +625,11 @@ describe('Stdio Agent', () => {
 
 ### Manual Testing
 
-Test your agent manually:
+Test your agent manually with JSON-RPC 2.0:
 
 ```bash
-# Create test input
-echo '{"type":"agent_request","data":{"agent":{"identifier":"test","name":"Test","description":"Test","prompt":"Test"},"tools":[],"servers":[],"messages":[{"sender":{"id":"user"},"type":"text","content":"Hello"}]}}' | node my-agent.js
+# Create test input (JSON-RPC dispatch)
+echo '{"jsonrpc":"2.0","id":1,"method":"dispatch","params":{"agent":{"identifier":"test","name":"Test","description":"Test","prompt":"Test"},"tools":[],"servers":[],"messages":[{"sender":{"id":"user"},"type":"text","content":"Hello"}]}}' | node my-agent.js
 ```
 
 ## Best Practices
@@ -694,23 +689,23 @@ await agent
 
 ### Common Issues
 
-**Agent not starting**
+#### Agent not starting
 
 - Check shebang line: `#!/usr/bin/env node`
 - Verify executable permissions: `chmod +x my-agent.js`
 - Ensure dependencies are installed: `npm install`
 
-**JSON parsing errors**
+#### JSON parsing errors
 
 - Only write protocol messages to stdout
 - Use stderr for all logging: `console.error()`
 - Test JSON output with: `echo 'input' | node agent.js | jq`
 
-**MCP timeouts**
+#### JSON-RPC timeouts
 
-- Check MCP request/response ID matching
+- Check JSON-RPC request/response ID matching
 - Verify tool names match available tools
-- Handle MCP errors gracefully
+- Handle JSON-RPC errors gracefully
 
 ### Debugging
 
