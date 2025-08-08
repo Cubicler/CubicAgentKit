@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.1] - 2025-08-08
+
+### Fixed (CI)
+
+- CI lint failure: replaced usage of experimental `import.meta.dirname` in `eslint.config.js` with a Node 20-compatible `__dirname` poly (via `fileURLToPath`) to restore type-aware linting in GitHub Actions.
+
+### Internal (Maintenance)
+
+- Bumped version to 2.4.1.
+
+
 ## [2.4.0] - 2025-08-08
 
 ### Added
@@ -33,5 +44,5 @@ Release process:
 1. Ensure working tree clean and on `main`.
 2. `npm run build`
 3. `npm publish` (or `npm publish --access public` if first time)
-4. Tag & push: `git tag v2.4.0 && git push origin v2.4.0`
+4. Tag & push: `git tag v2.4.1 && git push origin v2.4.1`
 5. Create GitHub Release from the tag with these notes.

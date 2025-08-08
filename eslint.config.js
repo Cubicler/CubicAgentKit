@@ -1,5 +1,10 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+// Node <22 / some 20.x minors do not yet expose import.meta.dirname; emulate for CI reliability
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -9,7 +14,8 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname,
+        // Use resolved directory (avoid import.meta.dirname which may be undefined in some Node 20 runners)
+        tsconfigRootDir: __dirname,
       },
     },
   },
