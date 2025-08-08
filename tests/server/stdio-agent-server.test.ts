@@ -1,531 +1,345 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StdioAgentServer } from '../../src/server/stdio-agent-server.js';
+import { AgentRequest } from '../../src/model/agent-request.js';
+import { AgentResponse } from '../../src/model/agent-response.js';
 import { RequestHandler } from '../../src/interface/agent-server.js';
-import { createMockAgentRequest, createMockAgentResponse } from '../mocks/test-helpers.js';
-import { MCPRequest } from '../../src/model/mcp.js';
 
-// Mock stdout write function
-const mockWrittenData: string[] = [];
-const mockStdoutWrite = vi.fn((data: string) => {
-  mockWrittenData.push(data);
-  return true;
-});
-
-// Mock stdin methods
+// Mock process.stdin and process.stdout
 const mockStdin = {
   setEncoding: vi.fn(),
   on: vi.fn(),
   removeAllListeners: vi.fn(),
   resume: vi.fn(),
-  pause: vi.fn(),
+  pause: vi.fn()
 };
+
+const mockStdout = {
+  write: vi.fn()
+};
+
+// Store original process methods
+const originalStdin = process.stdin;
+const originalStdout = process.stdout;
 
 describe('StdioAgentServer', () => {
   let server: StdioAgentServer;
-  let mockHandler: RequestHandler & { mockResolvedValue: any; mockRejectedValue: any };
-  let stdinDataHandler: (data: string) => void;
 
   beforeEach(() => {
-    // Reset mocks
-    vi.clearAllMocks();
-    mockWrittenData.length = 0;
-    
-    // Mock process globals
-    vi.stubGlobal('process', {
-      stdin: mockStdin,
-      stdout: { write: mockStdoutWrite },
-      on: vi.fn(),
+    // Replace process streams with mocks
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true
     });
-    
+    Object.defineProperty(process, 'stdout', {
+      value: mockStdout,
+      writable: true
+    });
+
     server = new StdioAgentServer();
-    mockHandler = vi.fn().mockResolvedValue(createMockAgentResponse());
-    
-    // Capture the stdin data handler
-    mockStdin.on.mockImplementation((event: string, handler: any) => {
-      if (event === 'data') {
-        stdinDataHandler = handler;
-      }
-    });
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  describe('constructor', () => {
-    it('should create StdioAgentServer instance', () => {
-      expect(server).toBeInstanceOf(StdioAgentServer);
+    // Restore original process streams
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true
     });
-
-    it('should set up signal handlers', () => {
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      const mockProcessOn = vi.mocked(process.on);
-      expect(mockProcessOn).toHaveBeenCalledWith('SIGINT', expect.any(Function));
-      expect(mockProcessOn).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+    Object.defineProperty(process, 'stdout', {
+      value: originalStdout,
+      writable: true
     });
   });
 
   describe('start', () => {
-    it('should configure stdin and send capabilities', async () => {
-      await server.start(mockHandler);
+    it('should set up stdin processing', async () => {
+      const handler: RequestHandler = vi.fn();
+      
+      await server.start(handler);
 
       expect(mockStdin.setEncoding).toHaveBeenCalledWith('utf8');
       expect(mockStdin.on).toHaveBeenCalledWith('data', expect.any(Function));
       expect(mockStdin.resume).toHaveBeenCalled();
-
-      // Should send capabilities announcement
-      expect(mockWrittenData).toHaveLength(1);
-      const announcement = JSON.parse(mockWrittenData[0]!);
-      expect(announcement).toMatchObject({
-        jsonrpc: '2.0',
-        method: 'notifications/capabilities',
-        params: {
-          capabilities: {
-            agents: {
-              dispatch: true
-            }
-          }
-        }
-      });
     });
 
     it('should throw error if already running', async () => {
-      await server.start(mockHandler);
+      const handler: RequestHandler = vi.fn();
       
-      await expect(server.start(mockHandler)).rejects.toThrow('StdioAgentServer is already running');
+      await server.start(handler);
+      
+      await expect(server.start(handler)).rejects.toThrow('StdioAgentServer is already running');
     });
   });
 
   describe('stop', () => {
-    it('should cleanup stdin listeners and pause', async () => {
-      await server.start(mockHandler);
+    it('should clean up stdin listeners', async () => {
+      const handler: RequestHandler = vi.fn();
+      
+      await server.start(handler);
       await server.stop();
 
       expect(mockStdin.removeAllListeners).toHaveBeenCalledWith('data');
       expect(mockStdin.pause).toHaveBeenCalled();
     });
 
-    it('should handle stop when not running', async () => {
-      await server.stop(); // Should not throw
-      expect(mockStdin.removeAllListeners).not.toHaveBeenCalled();
+    it('should be safe to call when not running', async () => {
+      await expect(server.stop()).resolves.toBeUndefined();
     });
   });
 
-  describe('request handling', () => {
-    beforeEach(async () => {
-      await server.start(mockHandler);
-      mockWrittenData.length = 0; // Clear capabilities announcement
-    });
-
-    it('should handle initialize request', async () => {
-      const initRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {}
-        },
-        id: 1
-      };
-
-      stdinDataHandler(JSON.stringify(initRequest) + '\n');
-
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 1,
-        result: {
-          protocolVersion: '2024-11-05',
-          capabilities: {
-            agents: {
-              dispatch: true
-            }
-          },
-          serverInfo: {
-            name: 'CubicAgentKit',
-            version: '2.1.0'
-          }
-        }
-      });
-    });
-
-    it('should handle initialized notification', async () => {
-      const initializedNotification = {
-        jsonrpc: '2.0',
-        method: 'notifications/initialized'
-      };
-
-      stdinDataHandler(JSON.stringify(initializedNotification) + '\n');
-
-      // Should not send any response for notifications
-      expect(mockWrittenData).toHaveLength(0);
-    });
-
-    it('should handle agent dispatch request', async () => {
-      const mockRequest = createMockAgentRequest();
-      const mockResponse = createMockAgentResponse({
+  describe('message handling', () => {
+    it('should handle agent_request messages', async () => {
+      const mockResponse: AgentResponse = {
+        timestamp: '2023-01-01T00:00:00.000Z',
         type: 'text',
-        content: 'Test response',
-        metadata: { usedToken: 25, usedTools: 1 }
-      });
-      
-      mockHandler.mockResolvedValue(mockResponse);
-
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: mockRequest as any, // AgentRequest doesn't match JSONObject interface exactly
-        id: 2
+        content: 'Hello, world!',
+        metadata: { usedToken: 10, usedTools: 0 }
       };
 
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
+      const handler: RequestHandler = vi.fn().mockResolvedValue(mockResponse);
+      await server.start(handler);
 
-      // Wait for async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
+      // Get the data handler function
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
 
-      expect(mockHandler).toHaveBeenCalledWith(mockRequest);
-      expect(mockWrittenData).toHaveLength(1);
-      
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 2,
-        result: mockResponse
-      });
-    });
-
-    it('should handle trigger-only agent request', async () => {
-      const triggerRequest = {
+      // Simulate receiving an agent request
+      const agentRequest: AgentRequest = {
         agent: {
-          identifier: 'agent-1', name: 'a', description: 'd', prompt: 'p'
+          identifier: 'test-agent',
+          name: 'Test Agent',
+          description: 'A test agent',
+          prompt: 'You are a test agent'
         },
         tools: [],
         servers: [],
-        trigger: {
-          type: 'webhook', identifier: 't1', name: 'n', description: 'd', triggeredAt: '2024-01-01T00:00:00.000Z', payload: { a: 1 }
-        }
+        messages: [
+          {
+            sender: { id: 'user1', name: 'User' },
+            type: 'text',
+            content: 'Hello'
+          }
+        ]
       };
 
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: triggerRequest as any,
-        id: 9
+      const requestMessage = {
+        type: 'agent_request',
+        data: agentRequest
       };
 
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
+      // Simulate stdin data
+      dataHandler(JSON.stringify(requestMessage) + '\n');
+
+      // Wait for async processing
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(mockHandler).toHaveBeenCalledWith(triggerRequest);
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response.id).toBe(9);
-      expect(response.result).toBeDefined();
+      // Verify handler was called
+      expect(handler).toHaveBeenCalledWith(agentRequest);
+
+      // Verify response was sent
+      expect(mockStdout.write).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'agent_response',
+          data: mockResponse
+        }) + '\n'
+      );
     });
 
-    it('should handle unknown method with error', async () => {
-      const unknownRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'unknown/method',
-        params: {},
-        id: 3
+    it('should handle handler errors gracefully', async () => {
+      const handler: RequestHandler = vi.fn().mockRejectedValue(new Error('Handler failed'));
+      await server.start(handler);
+
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      const agentRequest: AgentRequest = {
+        agent: {
+          identifier: 'test-agent',
+          name: 'Test Agent',
+          description: 'A test agent',
+          prompt: 'You are a test agent'
+        },
+        tools: [],
+        servers: [],
+        messages: [
+          { sender: { id: 'user1', name: 'User' }, type: 'text', content: 'Hello' }
+        ]
       };
 
-      stdinDataHandler(JSON.stringify(unknownRequest) + '\n');
+      const requestMessage = {
+        type: 'agent_request',
+        data: agentRequest
+      };
 
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 3,
-        error: {
-          code: -32601,
-          message: 'Method not found',
-          data: 'Unknown method: unknown/method'
-        }
-      });
+      dataHandler(JSON.stringify(requestMessage) + '\n');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Should send error response
+      expect(mockStdout.write).toHaveBeenCalledWith(
+        expect.stringContaining('"content":"Error: Handler failed"')
+      );
     });
 
-    it('should handle malformed JSON with parse error', async () => {
-      stdinDataHandler('invalid json\n');
+    it('should handle malformed JSON gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const handler: RequestHandler = vi.fn();
+      
+      await server.start(handler);
 
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: null,
-        error: {
-          code: -32700,
-          message: 'Parse error',
-          data: 'Invalid JSON received'
-        }
-      });
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      // Send malformed JSON
+      dataHandler('invalid json\n');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Should not call handler
+      expect(handler).not.toHaveBeenCalled();
+      
+      // Should log error
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[StdioAgentServer]',
+        'Failed to parse message:',
+        'invalid json',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
     });
 
-    it('should handle dispatch without handler', async () => {
-      // Clear the handler
+    it('should ignore non-agent_request messages', async () => {
+      const handler: RequestHandler = vi.fn();
+      await server.start(handler);
+
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      // Send mcp_response message (should be ignored by server)
+      const mcpResponse = {
+        type: 'mcp_response',
+        id: 'test-id',
+        data: { result: 'test' }
+      };
+
+      dataHandler(JSON.stringify(mcpResponse) + '\n');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Handler should not be called
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing handler gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      
+      // Start without handler (this shouldn't happen in normal usage)
+      const server = new StdioAgentServer();
+      (server as any).isRunning = true;
       (server as any).handler = null;
 
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: createMockAgentRequest() as any, // AgentRequest doesn't match JSONObject interface exactly
-        id: 4
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 4,
-        error: {
-          code: -32603,
-          message: 'Internal error',
-          data: 'No request handler registered'
-        }
-      });
-    });
-
-    it('should handle dispatch without params', async () => {
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        id: 5
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 5,
-        error: {
-          code: -32602,
-          message: 'Invalid params',
-          data: 'Agent request parameters required'
-        }
-      });
-    });
-
-    it('should handle invalid agent request structure', async () => {
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: { invalid: 'structure' }, // Invalid AgentRequest
-        id: 6
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 6,
-        error: {
-          code: -32602,
-          message: 'Invalid params',
-          data: 'Invalid AgentRequest structure'
-        }
-      });
-    });
-
-    it('should handle handler errors', async () => {
-      mockHandler.mockRejectedValue(new Error('Handler failed'));
-
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: createMockAgentRequest() as any,
-        id: 7
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      // Wait for async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      expect(mockWrittenData).toHaveLength(1);
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response).toMatchObject({
-        jsonrpc: '2.0',
-        id: 7,
-        error: {
-          code: -32603,
-          message: 'Internal error',
-          data: 'Handler failed'
-        }
-      });
-    });
-  });
-
-  describe('input buffering', () => {
-    beforeEach(async () => {
-      await server.start(mockHandler);
-      mockWrittenData.length = 0;
-    });
-
-    it('should handle multiple requests in single data chunk', async () => {
-      const request1: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {},
-        id: 1
-      };
-
-      const request2: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {},
-        id: 2
-      };
-
-      const multipleRequests = JSON.stringify(request1) + '\n' + JSON.stringify(request2) + '\n';
-      stdinDataHandler(multipleRequests);
-
-      expect(mockWrittenData).toHaveLength(2);
-      
-      const response1 = JSON.parse(mockWrittenData[0]!);
-      const response2 = JSON.parse(mockWrittenData[1]!);
-      
-      expect(response1.id).toBe(1);
-      expect(response2.id).toBe(2);
-    });
-
-    it('should handle partial requests across multiple data chunks', async () => {
-      const request: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {},
-        id: 1
-      };
-
-      const requestStr = JSON.stringify(request) + '\n';
-      
-      // Send in parts
-      stdinDataHandler(requestStr.slice(0, 10));
-      expect(mockWrittenData).toHaveLength(0); // No complete request yet
-      
-      stdinDataHandler(requestStr.slice(10));
-      expect(mockWrittenData).toHaveLength(1); // Now complete
-      
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response.id).toBe(1);
-    });
-
-    it('should ignore empty lines', async () => {
-      stdinDataHandler('\n\n\n');
-      expect(mockWrittenData).toHaveLength(0);
-    });
-  });
-
-  describe('agent request validation', () => {
-    beforeEach(async () => {
-      await server.start(mockHandler);
-      mockWrittenData.length = 0;
-    });
-
-    it('should validate complete agent request structure', async () => {
-      const validRequest = createMockAgentRequest();
-      
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: validRequest as any,
-        id: 1
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      // Wait for async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      expect(mockHandler).toHaveBeenCalledWith(validRequest);
-      expect(mockWrittenData).toHaveLength(1);
-      
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response.result).toBeDefined();
-      expect(response.error).toBeUndefined();
-    });
-
-    it('should reject request missing agent field', async () => {
-      const invalidRequest = {
-        tools: [],
-        servers: [],
-        messages: []
-        // Missing agent field
-      };
-
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: invalidRequest,
-        id: 1
-      };
-
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
-
-      expect(mockHandler).not.toHaveBeenCalled();
-      expect(mockWrittenData).toHaveLength(1);
-      
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response.error).toMatchObject({
-        code: -32602,
-        message: 'Invalid params'
-      });
-    });
-
-    it('should reject request with invalid agent structure', async () => {
-      const invalidRequest = {
-        agent: { identifier: 'test' }, // Missing required fields
+      // Directly call handleAgentRequest
+      const agentRequest: AgentRequest = {
+        agent: {
+          identifier: 'test-agent',
+          name: 'Test Agent',
+          description: 'A test agent',
+          prompt: 'You are a test agent'
+        },
         tools: [],
         servers: [],
         messages: []
       };
 
-      const dispatchRequest: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'agent/dispatch',
-        params: invalidRequest,
-        id: 1
-      };
+      await (server as any).handleAgentRequest(agentRequest);
 
-      stdinDataHandler(JSON.stringify(dispatchRequest) + '\n');
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[StdioAgentServer]',
+        'No handler registered for agent requests'
+      );
 
-      expect(mockHandler).not.toHaveBeenCalled();
-      expect(mockWrittenData).toHaveLength(1);
-      
-      const response = JSON.parse(mockWrittenData[0]!);
-      expect(response.error).toMatchObject({
-        code: -32602,
-        message: 'Invalid params'
-      });
+      consoleErrorSpy.mockRestore();
     });
   });
 
-  describe('response when not running', () => {
-    it('should not send messages when stopped', async () => {
-      await server.start(mockHandler);
-      await server.stop();
+  describe('buffer handling', () => {
+    it('should handle partial messages correctly', async () => {
+      const handler: RequestHandler = vi.fn().mockResolvedValue({
+        timestamp: '2023-01-01T00:00:00.000Z',
+        type: 'text',
+        content: 'Response',
+        metadata: { usedToken: 10, usedTools: 0 }
+      });
+      
+      await server.start(handler);
 
-      // Clear any messages sent during start/stop
-      mockWrittenData.length = 0;
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
 
-      const request: MCPRequest = {
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {},
-        id: 1
+      const agentRequest = {
+        type: 'agent_request',
+        data: {
+          agent: {
+            identifier: 'test-agent',
+            name: 'Test Agent',
+            description: 'A test agent',
+            prompt: 'You are a test agent'
+          },
+          tools: [],
+          servers: [],
+          messages: [
+            { sender: { id: 'user1', name: 'User' }, type: 'text', content: 'Hello' }
+          ]
+        }
       };
 
-      stdinDataHandler(JSON.stringify(request) + '\n');
+      const fullMessage = JSON.stringify(agentRequest) + '\n';
+      
+      // Send message in two parts
+      dataHandler(fullMessage.substring(0, 10));
+      dataHandler(fullMessage.substring(10));
 
-      // Should not send any response when stopped
-      expect(mockWrittenData).toHaveLength(0);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Handler should be called once with complete message
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle multiple messages in one data chunk', async () => {
+      const handler: RequestHandler = vi.fn().mockResolvedValue({
+        timestamp: '2023-01-01T00:00:00.000Z',
+        type: 'text',
+        content: 'Response',
+        metadata: { usedToken: 10, usedTools: 0 }
+      });
+      
+      await server.start(handler);
+
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      const agentRequest = {
+        type: 'agent_request',
+        data: {
+          agent: {
+            identifier: 'test-agent',
+            name: 'Test Agent',
+            description: 'A test agent',
+            prompt: 'You are a test agent'
+          },
+          tools: [],
+          servers: [],
+          messages: [
+            { sender: { id: 'user1', name: 'User' }, type: 'text', content: 'Hello' }
+          ]
+        }
+      };
+
+      // Send two messages in one chunk
+      const message1 = JSON.stringify(agentRequest) + '\n';
+      const message2 = JSON.stringify(agentRequest) + '\n';
+      
+      dataHandler(message1 + message2);
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Handler should be called twice
+      expect(handler).toHaveBeenCalledTimes(2);
     });
   });
 });

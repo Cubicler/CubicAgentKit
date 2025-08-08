@@ -1,367 +1,201 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EventEmitter } from 'events';
-import { MCPRequest, MCPResponse } from '../../src/model/mcp.js';
-
-// Mock child_process.spawn
-vi.mock('child_process', () => ({
-  spawn: vi.fn(),
-}));
-
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StdioAgentClient } from '../../src/client/stdio-agent-client.js';
-import { spawn } from 'child_process';
 
-const mockSpawn = vi.mocked(spawn);
+// Mock process.stdin and process.stdout
+const mockStdin = {
+  setEncoding: vi.fn(),
+  on: vi.fn(),
+  resume: vi.fn()
+};
 
-// Mock process class that extends EventEmitter
-class MockChildProcess extends EventEmitter {
-  public stdin = new MockWritableStream();
-  public stdout = new MockReadableStream();
-  public stderr = new MockReadableStream();
-  public killed = false;
+const mockStdout = {
+  write: vi.fn()
+};
 
-  kill() {
-    this.killed = true;
-    // Don't emit exit immediately to avoid circular calls
-    setTimeout(() => this.emit('exit', 0, null), 0);
-  }
-}
-
-class MockWritableStream extends EventEmitter {
-  public writtenData: string[] = [];
-
-  write(data: string): boolean {
-    this.writtenData.push(data);
-    return true;
-  }
-}
-
-class MockReadableStream extends EventEmitter {
-  simulateData(data: string) {
-    this.emit('data', Buffer.from(data));
-  }
-}
+// Store original process methods
+const originalStdin = process.stdin;
+const originalStdout = process.stdout;
 
 describe('StdioAgentClient', () => {
   let client: StdioAgentClient;
-  let mockProcess: MockChildProcess;
 
   beforeEach(() => {
-    mockProcess = new MockChildProcess();
-    mockSpawn.mockReturnValue(mockProcess as any);
-    client = new StdioAgentClient('npx', ['cubicler', '--server'], '/tmp');
-  });
+    // Replace process streams with mocks
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true
+    });
+    Object.defineProperty(process, 'stdout', {
+      value: mockStdout,
+      writable: true
+    });
 
-  afterEach(() => {
+    client = new StdioAgentClient();
     vi.clearAllMocks();
   });
 
-  describe('constructor', () => {
-    it('should create StdioAgentClient with provided parameters', () => {
-      const testClient = new StdioAgentClient('test-command', ['arg1', 'arg2'], '/test/dir');
-      expect(testClient).toBeInstanceOf(StdioAgentClient);
+  afterEach(() => {
+    // Restore original process streams
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true
     });
+    Object.defineProperty(process, 'stdout', {
+      value: originalStdout,
+      writable: true
+    });
+  });
 
-    it('should create StdioAgentClient with default args', () => {
-      const testClient = new StdioAgentClient('test-command');
-      expect(testClient).toBeInstanceOf(StdioAgentClient);
+  describe('constructor', () => {
+    it('should set up stdin processing', () => {
+      expect(mockStdin.setEncoding).toHaveBeenCalledWith('utf8');
+      expect(mockStdin.on).toHaveBeenCalledWith('data', expect.any(Function));
     });
   });
 
   describe('initialize', () => {
-    it('should spawn process and send initialize request', async () => {
-      // Mock successful initialization response
-      const initPromise = client.initialize();
-      
-      // Simulate MCP initialize response
-      const initResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 1,
-        result: { capabilities: {} }
-      };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(initResponse) + '\n');
-      
-      await initPromise;
-
-      expect(mockSpawn).toHaveBeenCalledWith('npx', ['cubicler', '--server'], {
-        cwd: '/tmp',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      // Should send initialize request
-      expect(mockProcess.stdin.writtenData).toHaveLength(2); // init + initialized notification
-      const initRequest = JSON.parse(mockProcess.stdin.writtenData[0]!);
-      expect(initRequest).toMatchObject({
-        jsonrpc: '2.0',
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          capabilities: {},
-          clientInfo: {
-            name: 'CubicAgentKit',
-            version: '2.1.0'
-          }
-        },
-        id: 1
-      });
-
-      // Should send initialized notification
-      const initializedNotification = JSON.parse(mockProcess.stdin.writtenData[1]!);
-      expect(initializedNotification).toMatchObject({
-        jsonrpc: '2.0',
-        method: 'notifications/initialized'
-      });
-    });
-
-    it('should handle initialization error response', async () => {
-      const initPromise = client.initialize();
-      
-      // Simulate MCP error response
-      const errorResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 1,
-        error: {
-          code: -32600,
-          message: 'Invalid Request'
-        }
-      };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(errorResponse) + '\n');
-      
-      await expect(initPromise).rejects.toThrow('MCP Error -32600: Invalid Request');
-    });
-
-    it('should only initialize once', async () => {
-      // First initialization
-      const initPromise1 = client.initialize();
-      mockProcess.stdout.simulateData(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\n');
-      await initPromise1;
-
-      // Second initialization should return immediately
-      await client.initialize();
-      
-      // Should only spawn once
-      expect(mockSpawn).toHaveBeenCalledTimes(1);
-    });
-
-    it('should handle missing stdio streams', async () => {
-      const mockProcessWithoutStdio = {
-        stdin: null,
-        stdout: null,
-        stderr: null,
-        on: vi.fn(),
-      };
-      mockSpawn.mockReturnValue(mockProcessWithoutStdio as any);
-
-      await expect(client.initialize()).rejects.toThrow('Failed to create stdio streams for cubicler process');
+    it('should resolve immediately', async () => {
+      await expect(client.initialize()).resolves.toBeUndefined();
     });
   });
 
   describe('callTool', () => {
-    beforeEach(async () => {
-      // Initialize client first
-      const initPromise = client.initialize();
-      mockProcess.stdout.simulateData(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\n');
-      await initPromise;
-    });
+    it('should send mcp_request and handle mcp_response', async () => {
+      // Get the data handler function
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
 
-    it('should send tool call request and return result', async () => {
-      const toolCallPromise = client.callTool('weatherService_getCurrentWeather', { city: 'Paris' });
-      
-      // Simulate tool call response
-      const toolResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 2,
-        result: {
-          content: [{ type: 'text', text: '{"temperature": 20, "condition": "sunny"}' }]
-        }
-      };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(toolResponse) + '\n');
-      
-      const result = await toolCallPromise;
+      // Start the call
+      const toolPromise = client.callTool('test-tool', { param: 'value' });
 
-      expect(result).toEqual({ temperature: 20, condition: 'sunny' });
+      // Check that MCP request was sent
+      expect(mockStdout.write).toHaveBeenCalledWith(
+        expect.stringContaining('"type":"mcp_request"')
+      );
 
-      // Check the tool call request
-      const toolCallRequest = JSON.parse(mockProcess.stdin.writtenData[2]!); // After init and initialized
-      expect(toolCallRequest).toMatchObject({
-        jsonrpc: '2.0',
-        method: 'tools/call',
-        params: {
-          name: 'weatherService_getCurrentWeather',
-          arguments: { city: 'Paris' }
-        },
-        id: 2
+      // Extract request ID from sent message
+      const sentMessage = JSON.parse(mockStdout.write.mock.calls[0][0]);
+      expect(sentMessage.type).toBe('mcp_request');
+      expect(sentMessage.data.method).toBe('tools/call');
+      expect(sentMessage.data.params).toEqual({
+        name: 'test-tool',
+        arguments: { param: 'value' }
       });
-    });
 
-    it('should handle tool call error response', async () => {
-      const toolCallPromise = client.callTool('invalidTool', {});
-      
-      const errorResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 2,
-        error: {
-          code: -32601,
-          message: 'Method not found'
+      // Simulate MCP response
+      const mcpResponse = {
+        type: 'mcp_response',
+        id: sentMessage.id,
+        data: {
+          jsonrpc: '2.0',
+          id: 1,
+          result: { success: true }
         }
       };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(errorResponse) + '\n');
-      
-      await expect(toolCallPromise).rejects.toThrow('MCP Error -32601: Method not found');
+
+      // Send response after short delay
+      setTimeout(() => {
+        dataHandler(JSON.stringify(mcpResponse) + '\n');
+      }, 10);
+
+      const result = await toolPromise;
+      expect(result).toEqual({ success: true });
     });
 
-    it('should handle raw text response without JSON parsing', async () => {
-      const toolCallPromise = client.callTool('textTool', {});
-      
-      const toolResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 2,
-        result: {
-          content: [{ type: 'text', text: 'Plain text response' }]
+    it('should handle MCP errors', async () => {
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      const toolPromise = client.callTool('failing-tool', {});
+
+      // Extract request ID
+      const sentMessage = JSON.parse(mockStdout.write.mock.calls[0][0]);
+
+      // Simulate error response
+      const errorResponse = {
+        type: 'mcp_response',
+        id: sentMessage.id,
+        data: {
+          jsonrpc: '2.0',
+          id: 1,
+          error: {
+            code: -1,
+            message: 'Tool failed'
+          }
         }
       };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(toolResponse) + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe('Plain text response');
+
+      setTimeout(() => {
+        dataHandler(JSON.stringify(errorResponse) + '\n');
+      }, 10);
+
+      await expect(toolPromise).rejects.toThrow('MCP Error -1: Tool failed');
     });
 
-    it('should handle response without content structure', async () => {
-      const toolCallPromise = client.callTool('simpleTool', {});
-      
-      const toolResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 2,
-        result: 'Simple string result'
-      };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(toolResponse) + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe('Simple string result');
-    });
+    it('should handle timeout', async () => {
+      // Mock setTimeout to fire immediately
+      const originalSetTimeout = global.setTimeout;
+      global.setTimeout = ((fn: any) => fn()) as any;
 
-    it('should handle null result', async () => {
-      const toolCallPromise = client.callTool('nullTool', {});
-      
-      const toolResponse: MCPResponse = {
-        jsonrpc: '2.0',
-        id: 2,
-        result: null
-      };
-      
-      mockProcess.stdout.simulateData(JSON.stringify(toolResponse) + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe(null);
-    });
-
-    it('should throw error if not initialized', async () => {
-      const uninitializedClient = new StdioAgentClient('test');
-      
-      await expect(uninitializedClient.callTool('tool', {})).rejects.toThrow('StdioAgentClient not initialized');
-    });
-  });
-
-  describe('response parsing', () => {
-    beforeEach(async () => {
-      const initPromise = client.initialize();
-      mockProcess.stdout.simulateData(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\n');
-      await initPromise;
-    });
-
-    it('should handle multiple responses on single line', async () => {
-      const toolCall1 = client.callTool('tool1', {});
-      const toolCall2 = client.callTool('tool2', {});
-      
-      // Send both responses in one data chunk
-      const response1 = JSON.stringify({ jsonrpc: '2.0', id: 2, result: 'result1' });
-      const response2 = JSON.stringify({ jsonrpc: '2.0', id: 3, result: 'result2' });
-      mockProcess.stdout.simulateData(response1 + '\n' + response2 + '\n');
-      
-      const [result1, result2] = await Promise.all([toolCall1, toolCall2]);
-      expect(result1).toBe('result1');
-      expect(result2).toBe('result2');
-    });
-
-    it('should handle partial JSON responses across data chunks', async () => {
-      const toolCallPromise = client.callTool('tool', {});
-      
-      const response = JSON.stringify({ jsonrpc: '2.0', id: 2, result: 'test' });
-      
-      // Send response in parts
-      mockProcess.stdout.simulateData(response.slice(0, 10));
-      mockProcess.stdout.simulateData(response.slice(10) + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe('test');
-    });
-
-    it('should ignore notifications (responses with null id)', async () => {
-      const toolCallPromise = client.callTool('tool', {});
-      
-      // Send notification first
-      const notification = JSON.stringify({ jsonrpc: '2.0', method: 'notification', params: {} });
-      mockProcess.stdout.simulateData(notification + '\n');
-      
-      // Then send actual response
-      const response = JSON.stringify({ jsonrpc: '2.0', id: 2, result: 'test' });
-      mockProcess.stdout.simulateData(response + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe('test');
+      try {
+        await expect(client.callTool('timeout-tool', {})).rejects.toThrow('MCP request timeout');
+      } finally {
+        global.setTimeout = originalSetTimeout;
+      }
     });
 
     it('should handle malformed JSON gracefully', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
       // Send malformed JSON
-      mockProcess.stdout.simulateData('invalid json\n');
-      
-      // Should continue processing valid responses
-      const toolCallPromise = client.callTool('tool', {});
-      const response = JSON.stringify({ jsonrpc: '2.0', id: 2, result: 'test' });
-      mockProcess.stdout.simulateData(response + '\n');
-      
-      const result = await toolCallPromise;
-      expect(result).toBe('test');
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to parse MCP response:', 'invalid json', expect.any(Error));
-      
-      consoleSpy.mockRestore();
+      dataHandler('invalid json\n');
+
+      // Should not throw, just log error
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[StdioAgentClient]',
+        'Failed to parse MCP response:',
+        'invalid json',
+        expect.any(Error)
+      );
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
-  describe('process lifecycle', () => {
-    it('should handle process stderr output', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
-      const initPromise = client.initialize();
-      
-      // Simulate stderr output
-      mockProcess.stderr.simulateData('Error log message');
-      
-      // Complete initialization
-      mockProcess.stdout.simulateData(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\n');
-      await initPromise;
-      
-      expect(consoleSpy).toHaveBeenCalledWith('Cubicler stderr:', 'Error log message');
-      consoleSpy.mockRestore();
+  describe('message handling', () => {
+    it('should ignore non-mcp_response messages', async () => {
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+
+      // Send agent_request message (should be ignored by client)
+      const agentRequest = {
+        type: 'agent_request',
+        data: { test: 'data' }
+      };
+
+      dataHandler(JSON.stringify(agentRequest) + '\n');
+
+      // Should not cause any errors or side effects
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
-  });
 
-  describe('shutdown', () => {
-    it('should kill process and cleanup resources', async () => {
-      const initPromise = client.initialize();
-      mockProcess.stdout.simulateData(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }) + '\n');
-      await initPromise;
+    it('should handle unknown mcp_response IDs gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
 
-      await client.shutdown();
+      const unknownResponse = {
+        type: 'mcp_response',
+        id: 'unknown-id',
+        data: { result: 'test' }
+      };
 
-      expect(mockProcess.killed).toBe(true);
+      dataHandler(JSON.stringify(unknownResponse) + '\n');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[StdioAgentClient]',
+        'Received MCP response for unknown request ID:',
+        'unknown-id'
+      );
+
+      consoleErrorSpy.mockRestore();
     });
   });
 });
