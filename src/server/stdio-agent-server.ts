@@ -202,20 +202,19 @@ export class StdioAgentServer implements AgentServer {
    * @returns true if valid AgentRequest
    * @private
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Need to validate unknown object structure
-  private isValidAgentRequest(obj: any): obj is AgentRequest {
-    if (!obj || typeof obj !== 'object') return false;
-    const hasAgent = obj.agent && typeof obj.agent === 'object' &&
-      typeof obj.agent.identifier === 'string' &&
-      typeof obj.agent.name === 'string' &&
-      typeof obj.agent.description === 'string' &&
-      typeof obj.agent.prompt === 'string';
-    const hasTools = Array.isArray(obj.tools);
-    const hasServers = Array.isArray(obj.servers);
-    const hasMessages = Array.isArray(obj.messages);
-    const hasTrigger = obj.trigger && typeof obj.trigger === 'object' && !Array.isArray(obj.trigger);
+  private isValidAgentRequest(obj: unknown): obj is AgentRequest {
+    if (!obj || typeof obj !== 'object') {
+      return false;
+    }
+  const candidate = obj as Partial<AgentRequest> & Record<string, unknown>;
+  const agent = candidate.agent;
+    const hasAgent = !!agent && typeof agent.identifier === 'string' && typeof agent.name === 'string' && typeof agent.description === 'string' && typeof agent.prompt === 'string';
+    const hasTools = Array.isArray(candidate.tools);
+    const hasServers = Array.isArray(candidate.servers);
+    const hasMessages = Array.isArray(candidate.messages);
+  const trigger = candidate.trigger;
+    const hasTrigger = !!trigger && typeof trigger === 'object' && !Array.isArray(trigger);
     const hasExactlyOne = (hasMessages ? 1 : 0) + (hasTrigger ? 1 : 0) === 1;
-
     return Boolean(hasAgent && hasTools && hasServers && hasExactlyOne);
   }
 

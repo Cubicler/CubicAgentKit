@@ -32,16 +32,14 @@ describe('CubicAgent Integration Tests', () => {
     });
 
     it('should start and stop successfully', async () => {
-      const handler = async (request: AgentRequest): Promise<RawAgentResponse> => {
-        return {
+      await cubicAgent.start()
+        .onMessage(async (): Promise<RawAgentResponse> => ({
           type: 'text',
           content: 'Hello from test agent',
           usedToken: 10
-        };
-      };
-
-      await expect(cubicAgent.start(handler)).resolves.not.toThrow();
-      await expect(cubicAgent.stop()).resolves.not.toThrow();
+        }))
+        .listen();
+      await cubicAgent.stop();
     });
   });
 
@@ -56,36 +54,33 @@ describe('CubicAgent Integration Tests', () => {
       server = new HttpAgentServer(agentPort, '/agent');
       cubicAgent = new CubicAgent(client, server);
 
-      const handler = async (request: AgentRequest, client: AgentClient, context: CallContext): Promise<RawAgentResponse> => {
-        const lastMessage = request.messages[request.messages.length - 1];
-        
-        if (lastMessage?.content?.includes('weather')) {
-          // Try to call a Cubicler tool
-          try {
-            const servers = await client.callTool('cubicler_available_servers', {});
-            const serverCount = (servers as any)?.servers?.length || 0;
-            return {
-              type: 'text',
-              content: `Found ${serverCount} servers. Tool calls: ${context.toolCallCount}`,
-              usedToken: 25
-            };
-          } catch (error) {
-            return {
-              type: 'text',
-              content: `Error calling tools: ${(error as Error).message}`,
-              usedToken: 15
-            };
+      await cubicAgent.start()
+        .onMessage(async (request: AgentRequest, client: AgentClient, context: CallContext): Promise<RawAgentResponse> => {
+          const lastMessage = request.messages?.[request.messages.length - 1];
+          if (lastMessage?.content?.includes('weather')) {
+            try {
+              const servers = await client.callTool('cubicler_available_servers', {});
+              const serverCount = (servers as any)?.servers?.length || 0;
+              return {
+                type: 'text',
+                content: `Found ${serverCount} servers. Tool calls: ${context.toolCallCount}`,
+                usedToken: 25
+              };
+            } catch (error) {
+              return {
+                type: 'text',
+                content: `Error calling tools: ${(error as Error).message}`,
+                usedToken: 15
+              };
+            }
           }
-        }
-        
-        return {
-          type: 'text',
-          content: `Echo: ${lastMessage?.content || 'no content'}`,
-          usedToken: 10
-        };
-      };
-
-      await cubicAgent.start(handler);
+          return {
+            type: 'text',
+            content: `Echo: ${lastMessage?.content || 'no content'}`,
+            usedToken: 10
+          };
+        })
+        .listen();
       // Give the server a moment to start
       await setTimeout(1000);
     });

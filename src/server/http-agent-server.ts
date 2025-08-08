@@ -114,26 +114,26 @@ export class HttpAgentServer implements AgentServer {
             return;
           }
 
-          const agentRequest = req.body as AgentRequest;
+          const candidate = req.body as Partial<AgentRequest>;
 
           // Validate required AgentRequest structure: agent, tools, servers, and exactly one of messages or trigger
-          const hasAgent = Boolean(agentRequest.agent);
-          const hasTools = Array.isArray((agentRequest as any).tools);
-          const hasServers = Array.isArray((agentRequest as any).servers);
-          const hasMessages = Array.isArray((agentRequest as any).messages);
-          const hasTrigger = agentRequest.trigger && typeof agentRequest.trigger === 'object' && !Array.isArray(agentRequest.trigger);
+          const hasAgent = typeof candidate.agent === 'object' && candidate.agent !== null;
+          const hasTools = Array.isArray(candidate.tools);
+          const hasServers = Array.isArray(candidate.servers);
+          const hasMessages = Array.isArray(candidate.messages);
+          const hasTrigger = typeof candidate.trigger === 'object' && candidate.trigger !== null && !Array.isArray(candidate.trigger);
           const hasExactlyOne = (hasMessages ? 1 : 0) + (hasTrigger ? 1 : 0) === 1;
 
-          if (!hasAgent || !hasTools || !hasServers || !hasExactlyOne) {
-            res.status(400).json({
-              error: 'Bad Request',
-              message: 'Request must include agent, tools, servers, and exactly one of messages or trigger'
-            });
-            return;
-          }
+            if (!hasAgent || !hasTools || !hasServers || !hasExactlyOne) {
+              res.status(400).json({
+                error: 'Bad Request',
+                message: 'Request must include agent, tools, servers, and exactly one of messages or trigger'
+              });
+              return;
+            }
 
-          // Call the handler with the parsed request
-          const agentResponse = await handler(agentRequest);
+          // Safe to cast now after structural validation
+          const agentResponse = await handler(candidate as AgentRequest);
           
           // Send the response back to the client
           res.json(agentResponse);
