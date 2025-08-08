@@ -107,7 +107,9 @@ describe('StdioAgentServer', () => {
       await server.start(handler);
 
       // Get the data handler function
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Simulate receiving an agent request
       const agentRequest: AgentRequest = {
@@ -155,7 +157,9 @@ describe('StdioAgentServer', () => {
       const handler: RequestHandler = vi.fn().mockRejectedValue(new Error('Handler failed'));
       await server.start(handler);
 
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       const agentRequest: AgentRequest = {
         agent: {
@@ -192,7 +196,9 @@ describe('StdioAgentServer', () => {
       
       await server.start(handler);
 
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Send malformed JSON
       dataHandler('invalid json\n');
@@ -217,7 +223,9 @@ describe('StdioAgentServer', () => {
       const handler: RequestHandler = vi.fn();
       await server.start(handler);
 
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       // Send mcp_response message (should be ignored by server)
       const mcpResponse = {
@@ -277,7 +285,9 @@ describe('StdioAgentServer', () => {
       
       await server.start(handler);
 
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       const agentRequest = {
         type: 'agent_request',
@@ -318,7 +328,9 @@ describe('StdioAgentServer', () => {
       
       await server.start(handler);
 
-      const dataHandler = mockStdin.on.mock.calls.find(call => call[0] === 'data')[1];
+      const dataCall = mockStdin.on.mock.calls.find(call => call[0] === 'data');
+      expect(dataCall).toBeDefined();
+      const dataHandler = dataCall![1];
 
       const agentRequest = {
         type: 'agent_request',
