@@ -76,9 +76,11 @@ export class StdioAgentClient implements AgentClient {
     });
 
     // Surface stdout errors for easier debugging in long-lived sessions
-    process.stdout.on('error', (err: unknown) => {
-      this.logger.error({ err }, 'StdioAgentClient: stdout error');
-    });
+    if (typeof process.stdout.on === 'function') {
+      process.stdout.on('error', (err: unknown) => {
+        this.logger.error({ err }, 'StdioAgentClient: stdout error');
+      });
+    }
   }
 
   /**
@@ -154,7 +156,7 @@ export class StdioAgentClient implements AgentClient {
     // Best-effort write; in typical line-delimited usage this won't backpressure,
     // but if it does, allow Node to buffer and continue when drained.
     const ok = process.stdout.write(messageStr);
-    if (!ok) {
+    if (!ok && typeof process.stdout.once === 'function') {
       // Attach a one-time drain handler to log if backpressure occurs
       process.stdout.once('drain', () => {
         this.logger.debug?.('StdioAgentClient: stdout drain event');

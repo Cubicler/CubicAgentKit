@@ -82,9 +82,11 @@ export class StdioAgentServer implements AgentServer {
     process.stdin.on('error', (err: unknown) => {
       console.error('StdioAgentServer stdin error:', err);
     });
-    process.stdout.on('error', (err: unknown) => {
-      console.error('StdioAgentServer stdout error:', err);
-    });
+    if (typeof process.stdout.on === 'function') {
+      process.stdout.on('error', (err: unknown) => {
+        console.error('StdioAgentServer stdout error:', err);
+      });
+    }
 
     // Keep the process alive
     process.stdin.resume();
