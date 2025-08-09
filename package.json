@@ -53,7 +53,9 @@
     "axios": "^1.11.0",
     "better-sqlite3": "^12.2.0",
     "eventsource": "^4.0.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pino": "^9.8.0",
+    "pino-pretty": "^13.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
