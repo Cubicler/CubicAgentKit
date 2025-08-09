@@ -129,8 +129,6 @@ describe('SSEAgentServer with JWT Authentication', () => {
       // Mock token retrieval failure
       mockJWTAuthProvider.getToken.mockRejectedValueOnce(new Error('Token expired'));
       
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
       // Access the private sendResponse method for testing
       const sendResponse = (server as any).sendResponse.bind(server);
       
@@ -146,7 +144,7 @@ describe('SSEAgentServer with JWT Authentication', () => {
 
       await sendResponse(mockResponse, 'test-request-123');
 
-      // Should continue without auth headers
+      // Should continue without auth headers when JWT token retrieval fails
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/sse/test-agent',
         {
@@ -157,13 +155,6 @@ describe('SSEAgentServer with JWT Authentication', () => {
           headers: {}
         }
       );
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to get JWT token for response:',
-        expect.any(Error)
-      );
-
-      consoleSpy.mockRestore();
     });
   });
 

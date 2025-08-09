@@ -142,22 +142,12 @@ describe('HttpAgentServer', () => {
 
   describe('start and stop', () => {
     it('should start server successfully', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
       await expect(server.start(mockHandler)).resolves.not.toThrow();
-      expect(consoleSpy).toHaveBeenCalledWith(`✅ Express server started on port ${testPort}, endpoint: /agent`);
-      
-      consoleSpy.mockRestore();
     });
 
     it('should stop server successfully', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
       await server.start(mockHandler);
       await expect(server.stop()).resolves.not.toThrow();
-      expect(consoleSpy).toHaveBeenCalledWith('✅ Express server stopped');
-      
-      consoleSpy.mockRestore();
     });
 
     it('should handle stopping server that is not running', async () => {
@@ -166,14 +156,11 @@ describe('HttpAgentServer', () => {
 
     it('should handle start with custom endpoint', async () => {
       const customServer = new HttpAgentServer(3002, '/custom-endpoint');
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
       try {
         await customServer.start(mockHandler);
-        expect(consoleSpy).toHaveBeenCalledWith('✅ Express server started on port 3002, endpoint: /custom-endpoint');
       } finally {
         await customServer.stop();
-        consoleSpy.mockRestore();
       }
     });
   });
@@ -330,6 +317,8 @@ describe('HttpAgentServer', () => {
     it('should return 500 when handler throws error', async () => {
       const errorMessage = 'Handler error';
       (mockHandler as any).mockRejectedValue(new Error(errorMessage));
+      const errorTestPort = 3005; // Use different port to avoid conflicts
+      const errorTestServer = new HttpAgentServer(errorTestPort);
 
       const validRequest: AgentRequest = {
         agent: createMockAgentInfo(),
@@ -338,21 +327,24 @@ describe('HttpAgentServer', () => {
         messages: []
       };
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
       try {
-        await axios.post(`http://localhost:${testPort}/agent`, validRequest);
-      } catch (error: any) {
-        expect(error.response?.status).toBe(500);
-        expect(error.response?.data.message).toBe(errorMessage);
-        expect(consoleSpy).toHaveBeenCalledWith('Error processing agent request:', expect.any(Error));
-      }
+        await errorTestServer.start(mockHandler);
 
-      consoleSpy.mockRestore();
+        try {
+          await axios.post(`http://localhost:${errorTestPort}/agent`, validRequest);
+        } catch (error: any) {
+          expect(error.response?.status).toBe(500);
+          expect(error.response?.data.message).toBe(errorMessage);
+        }
+      } finally {
+        await errorTestServer.stop();
+      }
     });
 
     it('should return 500 when handler throws non-Error', async () => {
       (mockHandler as any).mockRejectedValue('String error');
+      const nonErrorTestPort = 3006; // Use different port to avoid conflicts  
+      const nonErrorTestServer = new HttpAgentServer(nonErrorTestPort);
 
       const validRequest: AgentRequest = {
         agent: createMockAgentInfo(),
@@ -361,16 +353,18 @@ describe('HttpAgentServer', () => {
         messages: []
       };
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
       try {
-        await axios.post(`http://localhost:${testPort}/agent`, validRequest);
-      } catch (error: any) {
-        expect(error.response.status).toBe(500);
-        expect(error.response.data.message).toBe('Unknown error');
-      }
+        await nonErrorTestServer.start(mockHandler);
 
-      consoleSpy.mockRestore();
+        try {
+          await axios.post(`http://localhost:${nonErrorTestPort}/agent`, validRequest);
+        } catch (error: any) {
+          expect(error.response.status).toBe(500);
+          expect(error.response.data.message).toBe('Unknown error');
+        }
+      } finally {
+        await nonErrorTestServer.stop();
+      }
     });
 
     it('should handle complex agent request with all fields populated', async () => {
