@@ -1,153 +1,61 @@
-# CubicAgentKit AI Development Instructions
+# Repository Guidelines
 
-**npm library** for creating AI agents for Cubicler 2.0. TypeScript with composition architecture, dependency injection, and memory system.
+## Project Structure & Module Organization
 
-## Core Components
+- Source: `src/` — core modules in subfolders: `auth/`, `client/`, `core/`, `interface/`, `memory/`, `model/`, `server/`, `utils/`. Entry: `src/index.ts`.
+- Tests: `tests/` — unit tests alongside domain folders; integration tests in `tests/integration/`.
+- Docs: `docs/` — feature and transport guides.
+- Examples: `examples/`; Build output: `dist/`; Coverage: `coverage/`.
 
-```typescript
-class CubicAgent {
-  constructor(client: AgentClient, server: AgentServer, memory?: MemoryRepository)
-  async start(handler: DispatchHandler): Promise<void>
-}
+## Build, Test, and Development Commands
 
-type DispatchHandler = (request: AgentRequest, client: AgentClient, context: CallContext) => Promise<RawAgentResponse>
+- Build: `npm run build` (bundles via tsup to `dist/`).
+- Dev run: `npm run dev` (executes `src/index.ts` with ts-node); watch: `npm run dev:watch`.
+- Unit tests: `npm test` (watch), `npm run test:run` (once), `npm run test:ui`.
+- Integration tests: `npm run test:integration`, `npm run test:integration:run`.
+- All tests: `npm run test:all`.
+- Lint: `npm run lint`; auto-fix: `npm run lint:fix`.
+- Preflight: `npm run check` (lint + unit tests + build), `npm run check:all` (incl. integration).
 
-interface CallContext {
-  readonly toolCallCount: number;
-  memory?: MemoryRepository;
-}
-```
+## Coding Style & Naming Conventions
 
-## Architecture
-- **Composition over inheritance** - Use interfaces and dependency injection
-- **Communication**: HTTP (`AxiosAgentClient` + `ExpressAgentServer`) or Stdio (`StdioAgentClient` + `StdioAgentServer`)
-- **Memory**: SQLite persistence + LRU caching via factory functions
-- **Error handling**: Throw errors up to implementers
+- Language: TypeScript (Node >= 18). Modules use ESM.
+- Linting: ESLint + `typescript-eslint` (see `eslint.config.js`). Enforced: `no-var`, `prefer-const`, `eqeqeq`, `curly`, no unused vars (underscore-ignored), no `any` in `src/`.
+- File names: kebab-case for files (`jwt-auth-provider.ts`); Classes/Types: PascalCase; functions/vars: camelCase.
+- Indentation: 2 spaces. Avoid implicit `any`; prefer readonly and no floating promises.
 
-## Key Interfaces
+## Testing Guidelines
 
-### AgentClient
-```typescript
-interface AgentClient {
-  initialize(): Promise<void>;
-  callTool(toolName: string, parameters: JSONObject): Promise<JSONValue>;
-}
-```
+- Framework: Vitest. Unit tests live in `tests/**/*.test.ts` (excluding `tests/integration/**`).
+- Coverage: V8 provider with `text` and `html` reporters (output in `coverage/`).
+- Integration setup uses `tests/integration/setup.ts` and `global-setup.ts`. Run locally with required env (see below).
+- Add tests for new features/bug fixes; mirror folder structure of `src/` under `tests/`.
 
-### Memory System
-```typescript
-// Factory functions
-createDefaultMemoryRepository(maxTokens?, defaultImportance?) // In-memory SQLite
-createSQLiteMemoryRepository(dbPath, maxTokens?, defaultImportance?) // File-based
-createMemoryRepository(longTerm: SQLiteMemory, maxTokens?, defaultImportance?) // Custom
+## Commit & Pull Request Guidelines
 
-// Operations
-interface MemoryRepository {
-  remember(sentence: string, importance?: number, tags: string[]): Promise<string>
-  search(options: MemorySearchOptions): Promise<AgentMemory[]>
-  recall(id: string): Promise<AgentMemory | null>
-  // edit, tag, forget methods...
-}
-```
+- Commits: use Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`). Keep subjects imperative and concise.
+- PRs: include a clear description, linked issues, test coverage notes, and screenshots/logs when relevant. Ensure `npm run check` passes.
 
-## Response Types
-```typescript
-// Implementer provides
-interface RawAgentResponse {
-  type: 'text' | 'null';
-  content: string | null;
-  usedToken: number;
-}
+## Security & Configuration Tips
 
-// Kit sends to Cubicler (adds timestamp, tool count)
-interface AgentResponse {
-  timestamp: string;
-  metadata: { usedToken: number; usedTools: number; };
-}
-```
+- Do not commit secrets. For integration tests, set `CUBICLER_URL` (defaults `http://localhost:1504`).
+- JWT-related code lives in `src/auth/`; follow docs in `docs/JWT_AUTH.md`.
+- See transport guides in `docs/` (`HTTP_AGENT.md`, `SSE_AGENT.md`, `STDIO_AGENT.md`) when adding or modifying agent endpoints.
 
-## Usage Example
-```typescript
-import { CubicAgent, AxiosAgentClient, ExpressAgentServer, createSQLiteMemoryRepository } from 'cubicagentkit';
+## Agent-Specific Instructions
 
-const client = new AxiosAgentClient('http://localhost:1503');
-const server = new ExpressAgentServer(3000, '/agent');
-const memory = await createSQLiteMemoryRepository('./memories.db');
-const agent = new CubicAgent(client, server, memory);
+- Architecture: prefer composition and dependency injection; implement interfaces in `src/interface/`; avoid abstract classes.
+- Error handling: surface errors to implementers; do not swallow exceptions.
+- APIs: use current classes from `src/` — `HttpAgentClient`/`HttpAgentServer`, `SSEAgentServer`, `StdioAgentClient`/`StdioAgentServer`.
+- Memory: follow factory-based setup in `src/memory/`; keep persistence in SQLite and short-term in LRU; add tests when changing memory behavior.
+- Docs & tests: when public types or flows change, update `docs/` and mirror tests under `tests/`.
 
-await agent.start(async (request, client, context) => {
-  // Store in memory
-  await context.memory?.remember('User interaction', 0.8, ['interaction']);
-  
-  // Call tools
-  const result = await client.callTool('toolName', { params });
-  
-  return { type: 'text', content: `Result: ${result}`, usedToken: 25 };
-});
-```
+## Engineering Principles
 
-## Development Guidelines
-
-### DO
-- Use composition and dependency injection
-- Follow TypeScript strict typing
-- Create focused, testable interfaces
-- Throw errors up to implementers
-- Support middleware patterns
-- Use SQLite for persistence, LRU for caching
-
-### DO NOT
-- Create abstract classes
-- Handle errors internally  
-- Over-engineer the core CubicAgent class
-- Make assumptions about AI providers
-- Sacrifice type safety or testability
-- Create complex memory hierarchies
-
-## SOLID Principles
-- **Single Responsibility** - One reason to change per class/function
-- **Open/Closed** - Open for extension, closed for modification
-- **Liskov Substitution** - Derived classes substitutable for base
-- **Interface Segregation** - Specific interfaces over general ones
-- **Dependency Inversion** - Depend on abstractions, not concretions
-
-Focus on creating a simple, complete, testable library for Cubicler-compatible AI agents.
-
-## Your Memory Management Instructions
-
-Follow these steps for each interaction:
-
-1. User Identification:
-   - You should assume that you are interacting with default_user
-   - If you have not identified default_user, proactively try to do so.
-
-2. Memory Retrieval:
-   - Always begin your chat by saying only "Recalling..." and retrieve all relevant information from your knowledge graph
-   - Always refer to your knowledge graph as your "memory"
-   - Always do the "Recalling..." step if you are not sure about what to do next that might be stored in your memory
-
-3. Memory
-   - While conversing with the user, be attentive to any new information that falls into these categories:
-     - Basic Identity (age, gender, location, job title, education level, etc.)
-     - Behaviors (interests, habits, etc.)
-     - Preferences (communication style, preferred language, etc.)
-     - Project (important!):
-        - Architecture, and implementation decisions
-        - Project goals, milestones, and deadlines
-        - Project-specific knowledge (e.g., domain-specific terms, technologies used)
-
-4. Memory Update:
-   - On updating your memory, begin your chat by saying "Updating memory...".
-   - If any new information was gathered during the interaction, update your memory as follows:
-     - Create entities for recurring organizations, people, and significant events
-     - Connect them to the current entities using relations
-     - Store facts about them as observations
-
-## Work with Me
-
-- Always ask for clarification if you are unsure about something
-- Before start working on tasks, make a checklist plan and ask for confirmation
-- On each task completion, go back to the checklist and mark the task as done
-- If you encounter an issue during task completion, update the checklist with the issue as another task
-- Don't add new tasks to the checklist unless explicitly asked
-- Stop only after all tasks are done or you cannot proceed due to an issue
+- Architecture: contract-based, SOLID, and dependency inversion; avoid clever hacks.
+- Code: TypeScript-first with explicit types; prefer small, pure functions; justify any mutation.
+- Errors: never swallow; bubble via typed errors or a Result/Either style.
+- Tests: TDD-leaning; propose and add unit tests first (Vitest by default).
+- Docs: write short JSDoc for public functions; add an ADR note when changing architecture.
+- Security: validate inputs and sanitize external data; never commit secrets.
+- Git: make atomic commits with clear messages; show planned diff before writing.

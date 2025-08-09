@@ -12,6 +12,26 @@ With stdio transport:
 - **Agents can call MCP tools** directly through the stdio connection
 - **Perfect for local models**, command-line tools, or lightweight agents
 
+### Protocol (JSON-RPC over stdio)
+
+This library uses plain JSON-RPC 2.0 over line-delimited stdio (one JSON per line):
+
+- Parent → Agent request:
+  `{ "jsonrpc": "2.0", "id": <id>, "method": "dispatch", "params": AgentRequest }`
+- Agent → Parent response:
+  `{ "jsonrpc": "2.0", "id": <id>, "result": AgentResponse }`
+- Agent → Parent MCP tool call:
+  `{ "jsonrpc": "2.0", "id": <id>, "method": "tools/call", "params": { name, arguments } }`
+- Parent → Agent MCP response:
+  `{ "jsonrpc": "2.0", "id": <id>, "result": JSONValue }` or `{ "error": { code, message, data? } }`
+
+Notes:
+
+- Use stderr for logs; stdout is reserved for JSON-RPC lines.
+- The process should remain alive until the parent terminates it explicitly.
+
+See a working example at `examples/stdio-long-lived-agent.ts` that wires `CubicAgent`, `StdioAgentClient`, and `StdioAgentServer`.
+
 ## Configuration
 
 ### agents.json Structure
@@ -405,6 +425,12 @@ weather = call_cubicler_tool_http('weather_get_current', {'city': 'Paris'})
   }
 }
 ```
+
+## Timeout & Persistence
+
+- `DEFAULT_CALL_TIMEOUT` (env): per-call timeout for `StdioAgentClient` in ms (default: 30000).
+- `new StdioAgentClient({ timeoutMs })`: override timeout in code.
+- `new StdioAgentServer({ persistent: true, keepAliveIntervalMs: 60000 })`: keep the process alive until the parent kills it; ignores SIGHUP and logs stream errors to stderr.
 
 ## Testing Your Agent
 

@@ -1,108 +1,61 @@
-# CubicAgentKit - AI Development Context
+# Repository Guidelines
 
-## Project Overview
+## Project Structure & Module Organization
 
-**npm library** for creating AI agents for Cubicler 2.0. TypeScript with composition architecture, dependency injection, and memory system.
+- Source: `src/` — core modules in subfolders: `auth/`, `client/`, `core/`, `interface/`, `memory/`, `model/`, `server/`, `utils/`. Entry: `src/index.ts`.
+- Tests: `tests/` — unit tests alongside domain folders; integration tests in `tests/integration/`.
+- Docs: `docs/` — feature and transport guides.
+- Examples: `examples/`; Build output: `dist/`; Coverage: `coverage/`.
 
-- **Version**: 2.3.0, **Build**: tsup, **Test**: Vitest
-- **Architecture**: Composition over inheritance, interface-based design, error transparency
+## Build, Test, and Development Commands
 
-## Core Structure
+- Build: `npm run build` (bundles via tsup to `dist/`).
+- Dev run: `npm run dev` (executes `src/index.ts` with ts-node); watch: `npm run dev:watch`.
+- Unit tests: `npm test` (watch), `npm run test:run` (once), `npm run test:ui`.
+- Integration tests: `npm run test:integration`, `npm run test:integration:run`.
+- All tests: `npm run test:all`.
+- Lint: `npm run lint`; auto-fix: `npm run lint:fix`.
+- Preflight: `npm run check` (lint + unit tests + build), `npm run check:all` (incl. integration).
 
-```
-src/
-  core/cubic-agent.ts              # Main orchestrator with memory
-  client/                          # HTTP/Stdio clients + tracking
-  server/                          # HTTP/Stdio servers  
-  interface/                       # All interfaces
-  memory/                          # SQLite + LRU memory system
-  model/                           # Types & models
-```
+## Coding Style & Naming Conventions
 
-## Key Components
+- Language: TypeScript (Node >= 18). Modules use ESM.
+- Linting: ESLint + `typescript-eslint` (see `eslint.config.js`). Enforced: `no-var`, `prefer-const`, `eqeqeq`, `curly`, no unused vars (underscore-ignored), no `any` in `src/`.
+- File names: kebab-case for files (`jwt-auth-provider.ts`); Classes/Types: PascalCase; functions/vars: camelCase.
+- Indentation: 2 spaces. Avoid implicit `any`; prefer readonly and no floating promises.
 
-### CubicAgent
+## Testing Guidelines
 
-```typescript
-class CubicAgent {
-  constructor(client: AgentClient, server: AgentServer, memory?: MemoryRepository)
-  async start(handler: DispatchHandler): Promise<void>
-}
+- Framework: Vitest. Unit tests live in `tests/**/*.test.ts` (excluding `tests/integration/**`).
+- Coverage: V8 provider with `text` and `html` reporters (output in `coverage/`).
+- Integration setup uses `tests/integration/setup.ts` and `global-setup.ts`. Run locally with required env (see below).
+- Add tests for new features/bug fixes; mirror folder structure of `src/` under `tests/`.
 
-type DispatchHandler = (request: AgentRequest, client: AgentClient, context: CallContext) => Promise<RawAgentResponse>
+## Commit & Pull Request Guidelines
 
-interface CallContext {
-  readonly toolCallCount: number;
-  memory?: MemoryRepository;
-}
-```
+- Commits: use Conventional Commits (`feat:`, `fix:`, `chore:`, `ci:`). Keep subjects imperative and concise.
+- PRs: include a clear description, linked issues, test coverage notes, and screenshots/logs when relevant. Ensure `npm run check` passes.
 
-### Communication Modes
+## Security & Configuration Tips
 
-- **HTTP**: `AxiosAgentClient` + `ExpressAgentServer` (web deployments)
-- **Stdio**: `StdioAgentClient` + `StdioAgentServer` (CLI/local dev)
-- Both use MCP JSON-RPC 2.0 protocol
+- Do not commit secrets. For integration tests, set `CUBICLER_URL` (defaults `http://localhost:1504`).
+- JWT-related code lives in `src/auth/`; follow docs in `docs/JWT_AUTH.md`.
+- See transport guides in `docs/` (`HTTP_AGENT.md`, `SSE_AGENT.md`, `STDIO_AGENT.md`) when adding or modifying agent endpoints.
 
-### Memory System
+## Agent-Specific Instructions
 
-```typescript
-// Factory functions
-createDefaultMemoryRepository(maxTokens?, defaultImportance?) // In-memory SQLite
-createSQLiteMemoryRepository(dbPath, maxTokens?, defaultImportance?) // File-based
-createMemoryRepository(longTerm: SQLiteMemory, maxTokens?, defaultImportance?) // Custom
+- Architecture: prefer composition and dependency injection; implement interfaces in `src/interface/`; avoid abstract classes.
+- Error handling: surface errors to implementers; do not swallow exceptions.
+- APIs: use current classes from `src/` — `HttpAgentClient`/`HttpAgentServer`, `SSEAgentServer`, `StdioAgentClient`/`StdioAgentServer`.
+- Memory: follow factory-based setup in `src/memory/`; keep persistence in SQLite and short-term in LRU; add tests when changing memory behavior.
+- Docs & tests: when public types or flows change, update `docs/` and mirror tests under `tests/`.
 
-// Core operations
-interface MemoryRepository {
-  remember(sentence: string, importance?: number, tags: string[]): Promise<string>
-  search(options: MemorySearchOptions): Promise<AgentMemory[]>
-  recall(id: string): Promise<AgentMemory | null>
-  // edit, tag, forget methods...
-}
-```
+## Engineering Principles
 
-## Quick Usage
-
-### HTTP Mode
-
-```typescript
-import { CubicAgent, AxiosAgentClient, ExpressAgentServer, createDefaultMemoryRepository } from 'cubicagentkit';
-
-const client = new AxiosAgentClient('http://localhost:1503');
-const server = new ExpressAgentServer(3000, '/agent');
-const memory = await createDefaultMemoryRepository();
-const agent = new CubicAgent(client, server, memory);
-
-await agent.start(async (request, client, context) => {
-  await context.memory?.remember('User interaction', 0.8, ['interaction']);
-  const result = await client.callTool('toolName', { params });
-  return { type: 'text', content: `Result: ${result}`, usedToken: 25 };
-});
-```
-
-### Stdio Mode
-
-```typescript
-import { CubicAgent, StdioAgentClient, StdioAgentServer, createSQLiteMemoryRepository } from 'cubicagentkit';
-
-const client = new StdioAgentClient('npx', ['cubicler', '--server']);
-const server = new StdioAgentServer();
-const memory = await createSQLiteMemoryRepository('./memories.db');
-const agent = new CubicAgent(client, server, memory);
-```
-
-## Development
-
-- **Scripts**: `npm run build`, `npm test`, `npm run test:run`, `npm run lint`
-- **TypeScript**: ES2023, ESNext modules, strict mode
-- **Testing**: Vitest with mocks via `vi.fn()`, dependency injection for testability
-- **Architecture**: Follow composition pattern, create interfaces, comprehensive tests, update `src/index.ts` exports
-
-## Common Commands
-
-```bash
-npm test -- stdio           # Test specific files
-npm run build              # Build and check types
-npm run lint               # Run linter
-```
-
-Maintain consistency with established patterns and architecture.
+- Architecture: contract-based, SOLID, and dependency inversion; avoid clever hacks.
+- Code: TypeScript-first with explicit types; prefer small, pure functions; justify any mutation.
+- Errors: never swallow; bubble via typed errors or a Result/Either style.
+- Tests: TDD-leaning; propose and add unit tests first (Vitest by default).
+- Docs: write short JSDoc for public functions; add an ADR note when changing architecture.
+- Security: validate inputs and sanitize external data; never commit secrets.
+- Git: make atomic commits with clear messages; show planned diff before writing.

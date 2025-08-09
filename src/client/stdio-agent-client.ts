@@ -10,6 +10,11 @@ import type { Logger } from 'pino';
  * In the stdio protocol, the agent is spawned by Cubicler and communicates
  * via stdin/stdout using JSON-RPC 2.0. This client handles MCP calls back to Cubicler.
  */
+export interface StdioAgentClientOptions {
+  /** Timeout for each JSON-RPC call in ms (defaults to env DEFAULT_CALL_TIMEOUT or 30000) */
+  readonly timeoutMs?: number;
+}
+
 export class StdioAgentClient implements AgentClient {
   private readonly pendingMcpRequests = new Map<string, {
     resolve: (value: JSONValue) => void;
@@ -17,13 +22,18 @@ export class StdioAgentClient implements AgentClient {
   }>();
   private nextRequestId = 1;
   private readonly logger: Logger;
+  private readonly requestTimeoutMs: number;
 
   /**
    * Creates a new StdioAgentClient
    * This client assumes it's running within a Cubicler-spawned subprocess
    */
-  constructor() {
+  constructor(options?: StdioAgentClientOptions) {
     this.logger = createStdioLogger();
+    const envTimeout = Number.parseInt(process.env.DEFAULT_CALL_TIMEOUT || '', 10);
+    this.requestTimeoutMs = Number.isFinite(envTimeout) && envTimeout > 0
+      ? envTimeout
+      : (options?.timeoutMs ?? 30000);
     
     // Set up stdin listening for JSON-RPC responses
     process.stdin.setEncoding('utf8');
@@ -48,6 +58,26 @@ export class StdioAgentClient implements AgentClient {
           }
         }
       }
+    });
+
+    // If stdin closes, fail any pending requests so callers can recover
+    const failAllPending = (reason: string) => {
+      for (const [id, pending] of this.pendingMcpRequests.entries()) {
+        pending.reject(new Error(reason));
+        this.pendingMcpRequests.delete(id);
+      }
+    };
+
+    process.stdin.on('end', () => {
+      failAllPending('StdioAgentClient: stdin stream ended');
+    });
+    process.stdin.on('close', () => {
+      failAllPending('StdioAgentClient: stdin stream closed');
+    });
+
+    // Surface stdout errors for easier debugging in long-lived sessions
+    process.stdout.on('error', (err: unknown) => {
+      this.logger.error({ err }, 'StdioAgentClient: stdout error');
     });
   }
 
@@ -92,7 +122,7 @@ export class StdioAgentClient implements AgentClient {
           this.pendingMcpRequests.delete(reqIdStr);
           reject(new Error(`JSON-RPC request timeout for method ${method}`));
         }
-      }, 30000); // 30 second timeout
+      }, this.requestTimeoutMs);
     });
   }
 
@@ -121,6 +151,14 @@ export class StdioAgentClient implements AgentClient {
    */
   private sendJsonRpcMessage(request: STDIORequest): void {
     const messageStr = JSON.stringify(request) + '\n';
-    process.stdout.write(messageStr);
+    // Best-effort write; in typical line-delimited usage this won't backpressure,
+    // but if it does, allow Node to buffer and continue when drained.
+    const ok = process.stdout.write(messageStr);
+    if (!ok) {
+      // Attach a one-time drain handler to log if backpressure occurs
+      process.stdout.once('drain', () => {
+        this.logger.debug?.('StdioAgentClient: stdout drain event');
+      });
+    }
   }
 }

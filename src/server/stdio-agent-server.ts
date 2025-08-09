@@ -9,21 +9,57 @@ import type { Logger } from 'pino';
  * In the stdio protocol, Cubicler spawns this agent as a subprocess and sends
  * JSON-RPC 2.0 requests via stdin. The agent responds with JSON-RPC 2.0 responses via stdout.
  */
+export interface StdioAgentServerOptions {
+  /** Keep the process alive with a timer even if streams go idle (default: true) */
+  readonly persistent?: boolean;
+  /** Interval in ms for keep-alive timer when persistent (default: 60_000) */
+  readonly keepAliveIntervalMs?: number;
+}
+
 export class StdioAgentServer implements AgentServer {
   private handler: RequestHandler | null = null;
   private isRunning = false;
   private buffer = '';
   private readonly logger: Logger;
+  private keepAliveTimer: NodeJS.Timeout | null = null;
+  private readonly persistent: boolean;
+  private readonly keepAliveIntervalMs: number;
+  private static signalsRegistered = false;
 
   /**
    * Creates a new StdioAgentServer
    */
-  constructor() {
+  constructor(options?: StdioAgentServerOptions) {
     this.logger = createStdioLogger();
+    this.persistent = options?.persistent !== undefined ? options.persistent : true;
+    this.keepAliveIntervalMs = options?.keepAliveIntervalMs ?? 60_000;
     
-    // Set up graceful shutdown
-    process.on('SIGINT', () => { void this.stop(); });
-    process.on('SIGTERM', () => { void this.stop(); });
+    // Set up graceful shutdown and resilience (register once per process)
+    if (!StdioAgentServer.signalsRegistered) {
+      process.on('SIGINT', () => { void this.stop(); });
+      process.on('SIGTERM', () => { void this.stop(); });
+      // Ignore SIGHUP to avoid accidental termination if controlling terminal goes away
+      try { 
+        process.on('SIGHUP', () => { /* intentionally empty - ignore SIGHUP */ }); 
+      } catch { 
+        /* ignore if SIGHUP not supported */ 
+      }
+      // Prevent hard crashes from tearing down the process immediately
+      process.on('uncaughtException', (err) => {
+        // Write to stderr directly to avoid interfering with stdout protocol
+        console.error('StdioAgentServer uncaughtException:', err);
+      });
+      process.on('unhandledRejection', (reason) => {
+        console.error('StdioAgentServer unhandledRejection:', reason);
+      });
+      // Avoid MaxListeners warnings when multiple instances exist in tests
+      try { 
+        process.setMaxListeners?.(Math.max(process.getMaxListeners?.() ?? 10, 50)); 
+      } catch {
+        // Silently ignore if setMaxListeners is not available or fails
+      }
+      StdioAgentServer.signalsRegistered = true;
+    }
   }
 
   /**
@@ -43,9 +79,20 @@ export class StdioAgentServer implements AgentServer {
     process.stdin.on('data', (data: string) => {
       this.handleInput(data);
     });
+    process.stdin.on('error', (err: unknown) => {
+      console.error('StdioAgentServer stdin error:', err);
+    });
+    process.stdout.on('error', (err: unknown) => {
+      console.error('StdioAgentServer stdout error:', err);
+    });
 
     // Keep the process alive
     process.stdin.resume();
+    if (this.persistent && !this.keepAliveTimer) {
+      this.keepAliveTimer = setInterval(() => {
+        // No-op; presence of timer keeps event loop alive even if streams go idle
+      }, this.keepAliveIntervalMs);
+    }
 
     return Promise.resolve();
   }
@@ -64,6 +111,10 @@ export class StdioAgentServer implements AgentServer {
     // Clean up stdin listeners
     process.stdin.removeAllListeners('data');
     process.stdin.pause();
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
+    }
     
     return Promise.resolve();
   }
