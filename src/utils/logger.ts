@@ -1,103 +1,53 @@
-/**
- * Logger interface for CubicAgentKit
- */
-export interface Logger {
-  debug(message: string, ...args: unknown[]): void;
-  info(message: string, ...args: unknown[]): void;
-  warn(message: string, ...args: unknown[]): void;
-  error(message: string, ...args: unknown[]): void;
-}
-
-/**
- * Console logger implementation
- */
-export class ConsoleLogger implements Logger {
-  private readonly enabled: boolean;
-  private readonly prefix: string;
-
-  constructor(enabled: boolean = true, prefix: string = '') {
-    this.enabled = enabled;
-    this.prefix = prefix;
-  }
-
-  debug(message: string, ...args: unknown[]): void {
-    if (this.enabled) {
-      console.debug(this.formatMessage(message), ...args);
-    }
-  }
-
-  info(message: string, ...args: unknown[]): void {
-    if (this.enabled) {
-      console.info(this.formatMessage(message), ...args);
-    }
-  }
-
-  warn(message: string, ...args: unknown[]): void {
-    if (this.enabled) {
-      console.warn(this.formatMessage(message), ...args);
-    }
-  }
-
-  error(message: string, ...args: unknown[]): void {
-    if (this.enabled) {
-      console.error(this.formatMessage(message), ...args);
-    }
-  }
-
-  private formatMessage(message: string): string {
-    return this.prefix ? `${this.prefix} ${message}` : message;
-  }
-}
-
-/**
- * Silent logger that outputs nothing
- */
-export class SilentLogger implements Logger {
-  debug(): void {
-    // Silent
-  }
-
-  info(): void {
-    // Silent
-  }
-
-  warn(): void {
-    // Silent
-  }
-
-  error(message: string, ...args: unknown[]): void {
-    // Output errors to stderr even in silent mode for debugging
-    console.error(message, ...args);
-  }
-}
+import pino from 'pino';
 
 /**
  * Create a logger for STDIO transport
- * Uses SilentLogger to avoid polluting stdout
+ * Uses silent level to avoid polluting stdout
  */
-export function createStdioLogger(): Logger {
-  return new SilentLogger();
+export function createStdioLogger(): pino.Logger {
+  return pino({
+    level: 'silent' // Completely silent for stdio transport
+  });
 }
 
 /**
  * Create a logger for HTTP/SSE transports
- * Uses ConsoleLogger with appropriate prefix
+ * Uses Pino logger with appropriate configuration
  */
-export function createHttpLogger(prefix: string = '[CubicAgentKit]'): Logger {
-  return new ConsoleLogger(true, prefix);
+export function createHttpLogger(name: string = 'CubicAgentKit'): pino.Logger {
+  // Check if we're in test environment
+  if (process.env.NODE_ENV === 'test') {
+    return pino({
+      name,
+      level: process.env.LOG_LEVEL || 'silent' // Silent in tests unless LOG_LEVEL is set
+    });
+  }
+
+  return pino({
+    name,
+    level: process.env.LOG_LEVEL || 'info',
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'HH:MM:ss',
+        ignore: 'pid,hostname'
+      }
+    }
+  });
 }
 
 /**
  * Create a logger based on transport type
  */
-export function createLogger(transport: 'stdio' | 'http' | 'sse', prefix?: string): Logger {
+export function createLogger(transport: 'stdio' | 'http' | 'sse', name?: string): pino.Logger {
   switch (transport) {
     case 'stdio':
       return createStdioLogger();
     case 'http':
     case 'sse':
-      return createHttpLogger(prefix);
+      return createHttpLogger(name);
     default:
-      return new ConsoleLogger(true, prefix);
+      return createHttpLogger(name);
   }
 }

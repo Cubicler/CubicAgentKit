@@ -51,10 +51,7 @@ export type {
 export type { MCPRequest, MCPResponse, MCPError, MCPToolCall } from './model/mcp.js';
 
 // Logger utilities
-export type { Logger } from './utils/logger.js';
 export { 
-  ConsoleLogger, 
-  SilentLogger, 
   createStdioLogger, 
   createHttpLogger, 
   createLogger 
