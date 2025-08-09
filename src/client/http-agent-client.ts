@@ -4,6 +4,8 @@ import { JSONValue, JSONObject } from '../model/types.js';
 import { MCPRequest, MCPResponse } from '../model/mcp.js';
 import { JWTAuthProvider, JWTAuthConfig } from '../interface/jwt-auth.js';
 import { createJWTAuthProvider } from '../auth/jwt-auth-provider.js';
+import { createHttpLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * Middleware function type for request modification
@@ -18,6 +20,7 @@ export class HttpAgentClient implements AgentClient {
   private readonly httpClient: AxiosInstance;
   private requestId: number = 1;
   private jwtAuthProvider?: JWTAuthProvider;
+  private readonly logger: Logger;
 
   /**
    * Creates a new HttpAgentClient instance
@@ -37,6 +40,7 @@ export class HttpAgentClient implements AgentClient {
         'Content-Type': 'application/json',
       },
     });
+    this.logger = createHttpLogger('HttpAgentClient');
 
     // Set up JWT authentication if provided
     if (jwtConfig) {
@@ -80,7 +84,7 @@ export class HttpAgentClient implements AgentClient {
           config.headers.Authorization = `Bearer ${token}`;
         }
       } catch (error) {
-        console.error('Failed to get JWT token:', error);
+        this.logger.error('Failed to get JWT token: %s', error instanceof Error ? error.message : String(error));
         throw new Error(`JWT authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
       return config;
@@ -111,7 +115,7 @@ export class HttpAgentClient implements AgentClient {
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return this.httpClient(originalRequest);
           } catch (refreshError) {
-            console.error('Failed to refresh JWT token:', refreshError);
+            this.logger.error('Failed to refresh JWT token: %s', refreshError instanceof Error ? refreshError.message : String(refreshError));
             return Promise.reject(new Error(`JWT refresh failed: ${refreshError instanceof Error ? refreshError.message : 'Unknown error'}`));
           }
         }

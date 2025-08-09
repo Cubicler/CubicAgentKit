@@ -1,7 +1,8 @@
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
 import { STDIORequest, STDIOResponse } from '../model/stdio.js';
-import { Logger, createStdioLogger } from '../utils/logger.js';
+import { createStdioLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * Stdio implementation of AgentClient for making JSON-RPC 2.0 MCP calls back to Cubicler
@@ -43,7 +44,7 @@ export class StdioAgentClient implements AgentClient {
               this.handleJsonRpcResponse(message);
             }
           } catch (error) {
-            this.logger.error('Failed to parse JSON-RPC response:', line, error);
+            this.logger.error({ line, error }, 'Failed to parse JSON-RPC response');
           }
         }
       }
@@ -102,7 +103,7 @@ export class StdioAgentClient implements AgentClient {
     const reqIdStr = response.id.toString();
     const pending = this.pendingMcpRequests.get(reqIdStr);
     if (!pending) {
-      this.logger.error('Received JSON-RPC response for unknown request ID:', response.id);
+      this.logger.error('Received JSON-RPC response for unknown request ID: %s', String(response.id));
       return;
     }
 
