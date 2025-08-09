@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { JWTMiddlewareConfig, JWTVerificationOptions } from '../interface/jwt-auth.js';
+import { createHttpLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * JWT Header interface
@@ -38,7 +40,11 @@ export interface JWTRequest extends Request {
  * a library like 'jsonwebtoken' for more robust JWT handling.
  */
 class SimpleJWTVerifier {
-  constructor(private readonly options: JWTVerificationOptions) {}
+  private readonly logger: Logger;
+  
+  constructor(private readonly options: JWTVerificationOptions) {
+    this.logger = createHttpLogger('SimpleJWTVerifier');
+  }
 
   verify(token: string): JWTPayload {
     try {
@@ -98,7 +104,7 @@ class SimpleJWTVerifier {
       // For production use, implement proper signature verification based on the algorithm
       if (this.options.secret || this.options.publicKey) {
         // TODO: Implement signature verification
-        console.warn('JWT signature verification not implemented in SimpleJWTVerifier');
+        this.logger.warn('JWT signature verification not implemented in SimpleJWTVerifier');
       }
 
       return payload;
@@ -136,7 +142,8 @@ function defaultExtractToken(req: Request): string | undefined {
  * Default authentication failure handler
  */
 function defaultAuthFailureHandler(error: Error, req: Request, res: Response, _next: NextFunction): void {
-  console.error('JWT Authentication failed:', error.message);
+  const logger = createHttpLogger('JWTMiddleware');
+  logger.error('JWT Authentication failed: %s', error.message);
   res.status(401).json({
     error: 'Unauthorized',
     message: 'Invalid or missing JWT token'
@@ -183,6 +190,7 @@ export function createJWTMiddleware(config: JWTMiddlewareConfig) {
 export function createOptionalJWTMiddleware(config: JWTMiddlewareConfig) {
   const verifier = new SimpleJWTVerifier(config.verification);
   const extractToken = config.extractToken || defaultExtractToken;
+  const logger = createHttpLogger('OptionalJWTMiddleware');
 
   return (req: JWTRequest, res: Response, next: NextFunction): void => {
     try {
@@ -198,7 +206,7 @@ export function createOptionalJWTMiddleware(config: JWTMiddlewareConfig) {
       next();
     } catch (error) {
       // For optional middleware, we continue even if verification fails
-      console.warn('Optional JWT verification failed:', (error as Error).message);
+      logger.warn('Optional JWT verification failed: %s', (error as Error).message);
       next();
     }
   };
