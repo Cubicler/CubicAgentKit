@@ -8,6 +8,8 @@ import { AgentRequest } from '../model/agent.js';
 import { AgentResponse } from "../model/agent.js";
 import { JWTAuthConfig, JWTAuthProvider } from '../interface/jwt-auth.js';
 import { createJWTAuthProvider } from '../auth/jwt-auth-provider.js';
+import { createHttpLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * SSE-specific message format that includes the request ID
@@ -26,6 +28,7 @@ export class SSEAgentServer implements AgentServer {
   private handler?: RequestHandler;
   private isRunning = false;
   private jwtAuthProvider?: JWTAuthProvider;
+  private readonly logger: Logger;
 
   /**
    * Creates a new SSEAgentServer instance
@@ -47,6 +50,7 @@ export class SSEAgentServer implements AgentServer {
         'Content-Type': 'application/json',
       },
     });
+    this.logger = createHttpLogger('SSEAgentServer');
 
     // Set up JWT authentication if provided
     if (jwtConfig) {
@@ -89,7 +93,7 @@ export class SSEAgentServer implements AgentServer {
             'Authorization': `Bearer ${token}`
           };
         } catch (error) {
-          console.error('Failed to get JWT token for SSE connection:', error);
+          this.logger.error('Failed to get JWT token for SSE connection: %s', error instanceof Error ? error.message : String(error));
           // Continue without auth - let the server handle the auth failure
         }
       }
@@ -110,7 +114,7 @@ export class SSEAgentServer implements AgentServer {
           this.eventSource!.onopen = () => {
             if (!resolved) {
               resolved = true;
-              console.log(`✅ SSE connection established to ${sseUrl}`);
+              this.logger.info(`✅ SSE connection established to ${sseUrl}`);
               resolve();
             }
           };
@@ -120,7 +124,7 @@ export class SSEAgentServer implements AgentServer {
           };
 
           this.eventSource!.onerror = (error: any) => {
-            console.error('SSE connection error:', error);
+            this.logger.error('SSE connection error: %s', error instanceof Error ? error.message : String(error));
             if (!this.isRunning) {
               // If we're stopping, don't treat this as an error
               return;
@@ -137,7 +141,7 @@ export class SSEAgentServer implements AgentServer {
               // EventSource.CLOSED - Connection was closed, try to reconnect after a delay
               setTimeout(() => {
                 if (this.isRunning && this.handler) {
-                  console.log('Attempting to reconnect to SSE...');
+                  this.logger.info('Attempting to reconnect to SSE...');
                   void this.start(this.handler);
                 }
               }, 5000);
@@ -171,7 +175,7 @@ export class SSEAgentServer implements AgentServer {
    */
   private async handleSSEMessage(event: SSEMessageEvent): Promise<void> {
     if (!this.handler) {
-      console.error('No handler available to process SSE message');
+      this.logger.error('No handler available to process SSE message');
       return;
     }
 
@@ -181,7 +185,7 @@ export class SSEAgentServer implements AgentServer {
       
       // Validate the request structure
       if (!this.isValidSSEMessage(data)) {
-        console.error('Invalid SSE message received:', data);
+        this.logger.error({ data }, 'Invalid SSE message received');
         return;
       }
 
@@ -197,7 +201,7 @@ export class SSEAgentServer implements AgentServer {
       await this.sendResponse(agentResponse, id);
       
     } catch (error) {
-      console.error('Error processing SSE message:', error);
+      this.logger.error('Error processing SSE message: %s', error instanceof Error ? error.message : String(error));
       
       // Send an error response back to Cubicler if we have a request ID
       try {
@@ -223,7 +227,7 @@ export class SSEAgentServer implements AgentServer {
         };
         await this.sendResponse(errorResponse, requestId);
       } catch (responseError) {
-        console.error('Failed to send error response:', responseError);
+        this.logger.error('Failed to send error response: %s', responseError instanceof Error ? responseError.message : String(responseError));
       }
     }
   }
@@ -276,7 +280,7 @@ export class SSEAgentServer implements AgentServer {
         const token = await this.jwtAuthProvider.getToken();
         headers['Authorization'] = `Bearer ${token}`;
       } catch (error) {
-        console.error('Failed to get JWT token for response:', error);
+        this.logger.error('Failed to get JWT token for response: %s', error instanceof Error ? error.message : String(error));
         // Continue without auth - let the server handle the auth failure
       }
     }
@@ -307,7 +311,7 @@ export class SSEAgentServer implements AgentServer {
       if (this.eventSource) {
         this.eventSource.close();
         this.eventSource = undefined;
-        console.log('✅ SSE connection closed');
+        this.logger.info('✅ SSE connection closed');
       }
       
       this.handler = undefined;

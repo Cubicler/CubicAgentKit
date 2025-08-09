@@ -5,6 +5,8 @@ import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent.js';
 import { JWTMiddlewareConfig } from '../interface/jwt-auth.js';
 import { createJWTMiddleware, createOptionalJWTMiddleware, JWTRequest } from '../auth/jwt-middleware.js';
+import { createHttpLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * Express middleware function type
@@ -19,7 +21,7 @@ export class HttpAgentServer implements AgentServer {
   private readonly app: Express;
   private server?: Server;
   private jwtMiddleware?: ExpressRequestHandler;
-  
+  private readonly logger: Logger;
 
   /**
    * Creates a new ExpressAgentServer instance
@@ -33,6 +35,7 @@ export class HttpAgentServer implements AgentServer {
     jwtConfig?: JWTMiddlewareConfig
   ) {
     this.app = express();
+    this.logger = createHttpLogger('HttpAgentServer');
     
     // Add JSON parsing middleware
     this.app.use(express.json());
@@ -139,7 +142,7 @@ export class HttpAgentServer implements AgentServer {
           res.json(agentResponse);
         } catch (error) {
           // Handle errors and send appropriate HTTP response
-          console.error('Error processing agent request:', error);
+          this.logger.error('Error processing agent request: %s', error instanceof Error ? error.message : String(error));
           res.status(500).json({
             error: 'Internal server error',
             message: error instanceof Error ? error.message : 'Unknown error'
@@ -152,7 +155,7 @@ export class HttpAgentServer implements AgentServer {
     return new Promise<void>((resolve, reject) => {
       // Provide a callback to align with tests that mock listen(port, callback)
       this.server = this.app.listen(this.port, () => {
-        console.log(`✅ Express server started on port ${this.port}, endpoint: ${this.endpoint}`);
+        this.logger.info(`✅ Express server started on port ${this.port}, endpoint: ${this.endpoint}`);
         resolve();
       });
 
@@ -177,7 +180,7 @@ export class HttpAgentServer implements AgentServer {
           if (error) {
             reject(new Error(`Failed to stop Express server: ${error.message}`));
           } else {
-            console.log('✅ Express server stopped');
+            this.logger.info('✅ Express server stopped');
             this.server = undefined;
             resolve();
           }

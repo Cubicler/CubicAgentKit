@@ -1,6 +1,7 @@
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { STDIODispatchRequest, STDIODispatchResponse } from '../model/stdio.js';
-import { Logger, createStdioLogger } from '../utils/logger.js';
+import { createStdioLogger } from '../utils/logger.js';
+import type { Logger } from 'pino';
 
 /**
  * Stdio implementation of AgentServer for handling JSON-RPC 2.0 requests from Cubicler
@@ -100,7 +101,7 @@ export class StdioAgentServer implements AgentServer {
       }
       // Ignore other message types silently (like log output)
     } catch (error) {
-      this.logger.error('Error handling message:', error);
+      this.logger.error('Error handling message: %s', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -124,7 +125,7 @@ export class StdioAgentServer implements AgentServer {
         result: response
       });
     } catch (error) {
-      this.logger.error('Error processing JSON-RPC agent request:', error);
+      this.logger.error('Error processing JSON-RPC agent request: %s', error instanceof Error ? error.message : String(error));
       
       // Send JSON-RPC error response
       this.sendJsonRpcError(
