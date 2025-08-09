@@ -1,3 +1,32 @@
+# [2.6.2] - 2025-08-09
+### Fixed
+- Restored compatibility for stdio agent client/server with Node.js streams and test mocks
+- Removed unsupported `process.stdout.on` usage
+- All unit tests now pass for stdio agent components
+
+### Added
+- Example: `examples/stdio-long-lived-agent.ts` for persistent agent process
+- Documentation updates for stdio agent patterns and recommendations
+
+### Changed
+- Updated `.github/copilot-instructions.md`, `CLAUDE.md`, `STDIO_AGENT_INTEGRATION.md` with latest stdio agent patterns
+- Improved error handling and process management in stdio agent client/server
+
+# [2.6.1] - 2025-08-09
+### Added
+- Pino logger integration for structured logging
+- Pretty-printed logs for HTTP/SSE transports
+- Silent logging for stdio transport
+
+### Changed
+- Replaced all `console.log` statements with Pino logging
+- Environment-aware logging configuration
+
+### Quality
+- All 362 unit tests passing
+- ESLint clean
+- TypeScript compilation successful
+- Build process verified
 # Changelog
 
 All notable changes to this project will be documented in this file.
