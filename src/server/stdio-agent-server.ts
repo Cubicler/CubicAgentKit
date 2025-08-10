@@ -2,6 +2,7 @@ import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { STDIODispatchRequest, STDIODispatchResponse } from '../model/stdio.js';
 import { createStdioLogger } from '../utils/logger.js';
 import type { Logger } from 'pino';
+import { JSONObject } from '../model/types.js';
 
 /**
  * Stdio implementation of AgentServer for handling JSON-RPC 2.0 requests from Cubicler
@@ -36,8 +37,18 @@ export class StdioAgentServer implements AgentServer {
     
     // Set up graceful shutdown and resilience (register once per process)
     if (!StdioAgentServer.signalsRegistered) {
-      process.on('SIGINT', () => { void this.stop(); });
-      process.on('SIGTERM', () => { void this.stop(); });
+      process.on('SIGINT', () => { 
+        void this.stop().then(() => process.exit(0)).catch((error) => {
+          console.error('Error during SIGINT shutdown:', error);
+          process.exit(1);
+        });
+      });
+      process.on('SIGTERM', () => { 
+        void this.stop().then(() => process.exit(0)).catch((error) => {
+          console.error('Error during SIGTERM shutdown:', error);
+          process.exit(1);
+        });
+      });
       // Ignore SIGHUP to avoid accidental termination if controlling terminal goes away
       try { 
         process.on('SIGHUP', () => { /* intentionally empty - ignore SIGHUP */ }); 
@@ -48,9 +59,11 @@ export class StdioAgentServer implements AgentServer {
       process.on('uncaughtException', (err) => {
         // Write to stderr directly to avoid interfering with stdout protocol
         console.error('StdioAgentServer uncaughtException:', err);
+        // Don't exit - let the process continue to handle more requests
       });
       process.on('unhandledRejection', (reason) => {
         console.error('StdioAgentServer unhandledRejection:', reason);
+        // Don't exit - let the process continue to handle more requests
       });
       // Avoid MaxListeners warnings when multiple instances exist in tests
       try { 
@@ -79,11 +92,11 @@ export class StdioAgentServer implements AgentServer {
     process.stdin.on('data', (data: string) => {
       this.handleInput(data);
     });
-    process.stdin.on('error', (err: unknown) => {
+    process.stdin.on('error', (err: Error) => {
       console.error('StdioAgentServer stdin error:', err);
     });
     if (typeof process.stdout.on === 'function') {
-      process.stdout.on('error', (err: unknown) => {
+      process.stdout.on('error', (err: Error) => {
         console.error('StdioAgentServer stdout error:', err);
       });
     }
@@ -134,7 +147,7 @@ export class StdioAgentServer implements AgentServer {
     for (const line of lines) {
       if (line.trim()) {
         try {
-          const message = JSON.parse(line) as STDIODispatchRequest | Record<string, unknown>;
+          const message = JSON.parse(line) as STDIODispatchRequest;
           void this.handleMessage(message);
         } catch {
           // Silently ignore non-JSON lines (like log messages)
@@ -146,11 +159,11 @@ export class StdioAgentServer implements AgentServer {
   /**
    * Handle a parsed JSON-RPC message
    */
-  private async handleMessage(message: STDIODispatchRequest | Record<string, unknown>): Promise<void> {
+  private async handleMessage(message: STDIODispatchRequest): Promise<void> {
     try {
       // Check if it's a valid JSON-RPC request
       if ('jsonrpc' in message && message.jsonrpc === '2.0' && 'method' in message && message.method === 'dispatch') {
-        await this.handleJsonRpcRequest(message as STDIODispatchRequest);
+        await this.handleJsonRpcRequest(message);
       }
       // Ignore other message types silently (like log output)
     } catch (error) {
@@ -204,7 +217,7 @@ export class StdioAgentServer implements AgentServer {
   /**
    * Send a JSON-RPC 2.0 error response
    */
-  private sendJsonRpcError(id: string | number, code: number, message: string, data?: unknown): void {
+  private sendJsonRpcError(id: string | number, code: number, message: string, data?: string | number | boolean | JSONObject): void {
     if (!this.isRunning) {
       return;
     }

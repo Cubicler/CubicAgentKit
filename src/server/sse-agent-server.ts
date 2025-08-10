@@ -1,7 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import axios, { AxiosInstance } from 'axios';
 type SSEMessageEvent = { data: string };
+
+interface EventSource {
+  onopen: (() => void) | null;
+  onmessage: ((event: SSEMessageEvent) => void) | null;
+  onerror: ((error: Event) => void) | null;
+  readyState: number;
+  close(): void;
+}
+
+interface EventSourceInit {
+  headers?: Record<string, string>;
+  withCredentials?: boolean;
+}
 
 import { AgentServer, RequestHandler } from '../interface/agent-server.js';
 import { AgentRequest } from '../model/agent.js';
@@ -23,7 +34,7 @@ interface SSEMessage extends AgentRequest {
  * Connects to Cubicler's SSE endpoint to receive agent requests and sends responses back via HTTP POST
  */
 export class SSEAgentServer implements AgentServer {
-  private eventSource?: any;
+  private eventSource?: EventSource;
   private readonly httpClient: AxiosInstance;
   private handler?: RequestHandler;
   private isRunning = false;
@@ -84,8 +95,8 @@ export class SSEAgentServer implements AgentServer {
     const sseUrl = `${this.cubiclerUrl}/sse/${this.agentId}`;
     
     // Prepare EventSource options with JWT auth if available
-    const prepareEventSourceOptions = async (): Promise<any> => {
-      const eventSourceOptions: any = {};
+    const prepareEventSourceOptions = async (): Promise<EventSourceInit> => {
+      const eventSourceOptions: EventSourceInit = {};
       if (this.jwtAuthProvider) {
         try {
           const token = await this.jwtAuthProvider.getToken();
@@ -108,10 +119,14 @@ export class SSEAgentServer implements AgentServer {
       void (async () => {
         try {
           const mod = await import('eventsource');
-          const EventSourceCtor: any = (mod as any).EventSource || (mod as any).default || mod;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const EventSourceCtor = (mod as any).EventSource || (mod as any).default || mod;
           this.eventSource = new EventSourceCtor(sseUrl, eventSourceOptions);
 
-          this.eventSource!.onopen = () => {
+          if (!this.eventSource) {
+            throw new Error('EventSource not initialized');
+          }
+          this.eventSource.onopen = () => {
             if (!resolved) {
               resolved = true;
               this.logger.info(`✅ SSE connection established to ${sseUrl}`);
@@ -119,12 +134,12 @@ export class SSEAgentServer implements AgentServer {
             }
           };
 
-          this.eventSource!.onmessage = (event: SSEMessageEvent) => {
+          this.eventSource.onmessage = (event: SSEMessageEvent) => {
             void this.handleSSEMessage(event);
           };
 
-          this.eventSource!.onerror = (error: any) => {
-            this.logger.error('SSE connection error: %s', error instanceof Error ? error.message : String(error));
+          this.eventSource.onerror = (error: Event) => {
+            this.logger.error('SSE connection error: %s', error instanceof Error ? error.message : 'Unknown error');
             if (!this.isRunning) {
               // If we're stopping, don't treat this as an error
               return;
@@ -133,7 +148,7 @@ export class SSEAgentServer implements AgentServer {
             if (!resolved) {
               resolved = true;
               this.isRunning = false;
-              reject(new Error(`SSE connection failed: ${error?.message || 'Connection error'}`));
+              reject(new Error(`SSE connection failed: ${error instanceof Error ? error.message : 'Connection error'}`));
               return;
             }
 
@@ -181,7 +196,7 @@ export class SSEAgentServer implements AgentServer {
 
     try {
       // Parse the incoming message as an SSEMessage
-      const data: unknown = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
       
       // Validate the request structure
       if (!this.isValidSSEMessage(data)) {
@@ -206,14 +221,13 @@ export class SSEAgentServer implements AgentServer {
       // Send an error response back to Cubicler if we have a request ID
       try {
         // Try to extract the ID from the parsed data if possible
-        let requestId = 'unknown';
+        let requestId = 'unidentified';
         try {
-          const data: unknown = JSON.parse(event.data);
-          if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'string') {
+      const data = JSON.parse(event.data);          if (data && typeof data === 'object' && 'id' in data && typeof data.id === 'string') {
             requestId = data.id;
           }
         } catch {
-          // If we can't parse the data, use 'unknown'
+          // If we can't parse the data, use 'unidentified'
         }
         
         const errorResponse: AgentResponse = {

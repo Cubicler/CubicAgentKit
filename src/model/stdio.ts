@@ -5,7 +5,7 @@ import { AgentResponse } from "./agent.js";
 /**
  * STDIO JSON-RPC 2.0 request structure
  */
-export interface STDIORequest {
+export interface StdioRequest {
   jsonrpc: '2.0';
   id: string | number;
   method: string;
@@ -15,7 +15,7 @@ export interface STDIORequest {
 /**
  * STDIO JSON-RPC 2.0 response structure
  */
-export interface STDIOResponse {
+export interface StdioResponse {
   jsonrpc: '2.0';
   id: string | number;
   result?: JSONValue;
@@ -28,7 +28,7 @@ export interface STDIOResponse {
 export interface STDIOError {
   code: number;
   message: string;
-  data?: unknown;
+  data?: string | number | boolean | null | JSONObject;
 }
 
 /**

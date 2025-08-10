@@ -108,12 +108,12 @@ export class OAuthJWTAuthProvider implements JWTAuthProvider {
       this.updateTokenData(tokenResponse);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const responseData: unknown = error.response?.data;
+        const responseData = error.response?.data as Record<string, string | number | boolean> | undefined;
         const errorDescription = responseData && 
           typeof responseData === 'object' && 
           responseData !== null && 
           'error_description' in responseData 
-          ? String((responseData as Record<string, unknown>).error_description) 
+          ? String(responseData.error_description) 
           : error.message;
         throw new Error(`OAuth token acquisition failed: ${errorDescription}`);
       }

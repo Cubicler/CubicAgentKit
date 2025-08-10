@@ -1,32 +1,68 @@
-# [2.6.2] - 2025-08-09
+# [2.6.3] - 2025-08-10
+
+### Added
+
+- **Type Safety Improvements**: Comprehensive replacement of `any` and `unknown` types with concrete type definitions
+- **EventSource Type Definitions**: Added proper EventSource interface definitions for SSE agent server
+- **Enhanced Error Handling**: Improved error type safety across all transport implementations
+
+### Changed
+
+- **JWT Interfaces**: Replaced `unknown` types in JWT payload and header interfaces with proper union types
+- **OAuth Error Handling**: Improved OAuth error response type safety in JWT auth provider
+- **Stdio Transport**: Enhanced type safety for JSON-RPC message handling
+- **SSE Transport**: Improved type definitions for SSE message validation and error handling
+
 ### Fixed
+
+- **TypeScript Strict Mode**: Resolved all remaining `any` and `unknown` type issues
+- **Linting**: All ESLint rules now pass without disable comments
+- **Error Types**: Replaced generic error types with proper `Error` interface usage
+
+### Internal
+
+- **All 362 tests passing**: Complete test suite validation after type safety improvements
+- **Zero breaking changes**: Maintained full backward compatibility
+- **Code Quality**: Significantly improved type safety and developer experience
+
+# [2.6.2] - 2025-08-09
+
+### Fixed
+
 - Restored compatibility for stdio agent client/server with Node.js streams and test mocks
 - Removed unsupported `process.stdout.on` usage
 - All unit tests now pass for stdio agent components
 
 ### Added
+
 - Example: `examples/stdio-long-lived-agent.ts` for persistent agent process
 - Documentation updates for stdio agent patterns and recommendations
 
 ### Changed
+
 - Updated `.github/copilot-instructions.md`, `CLAUDE.md`, `STDIO_AGENT_INTEGRATION.md` with latest stdio agent patterns
 - Improved error handling and process management in stdio agent client/server
 
 # [2.6.1] - 2025-08-09
+
 ### Added
+
 - Pino logger integration for structured logging
 - Pretty-printed logs for HTTP/SSE transports
 - Silent logging for stdio transport
 
 ### Changed
+
 - Replaced all `console.log` statements with Pino logging
 - Environment-aware logging configuration
 
 ### Quality
+
 - All 362 unit tests passing
 - ESLint clean
 - TypeScript compilation successful
 - Build process verified
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -38,7 +74,7 @@ All notable changes to this project will be documented in this file.
 - **JSON-RPC 2.0 Protocol**: Stdio transport now uses standard JSON-RPC 2.0 for all communication instead of custom message types
 - **Consolidated Agent Models**: New unified `agent.ts` model file containing all agent request/response types (`AgentRequest`, `MessageRequest`, `TriggerRequest`, `RawAgentResponse`, `AgentResponse`)
 - **Logger Infrastructure**: Comprehensive logging system with `Logger` interface, `ConsoleLogger`, `SilentLogger`, and transport-specific utilities
-- **JSON-RPC Types**: New `stdio.ts` model with complete JSON-RPC 2.0 protocol structures (`STDIORequest`, `STDIOResponse`, `STDIODispatchRequest`, etc.)
+- **JSON-RPC Types**: New `stdio.ts` model with complete JSON-RPC 2.0 protocol structures (`StdioRequest`, `StdioResponse`, `STDIODispatchRequest`, etc.)
 
 ### Changed
 

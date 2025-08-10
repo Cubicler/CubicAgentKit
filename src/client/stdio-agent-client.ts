@@ -1,6 +1,6 @@
 import { AgentClient } from '../interface/agent-client.js';
 import { JSONValue, JSONObject } from '../model/types.js';
-import { STDIORequest, STDIOResponse } from '../model/stdio.js';
+import { StdioRequest, StdioResponse } from '../model/stdio.js';
 import { createStdioLogger } from '../utils/logger.js';
 import type { Logger } from 'pino';
 
@@ -49,7 +49,7 @@ export class StdioAgentClient implements AgentClient {
       for (const line of lines) {
         if (line.trim()) {
           try {
-            const message = JSON.parse(line) as STDIOResponse;
+            const message = JSON.parse(line) as StdioResponse;
             if ('jsonrpc' in message && 'id' in message) {
               this.handleJsonRpcResponse(message);
             }
@@ -77,7 +77,7 @@ export class StdioAgentClient implements AgentClient {
 
     // Surface stdout errors for easier debugging in long-lived sessions
     if (typeof process.stdout.on === 'function') {
-      process.stdout.on('error', (err: unknown) => {
+      process.stdout.on('error', (err: Error) => {
         this.logger.error({ err }, 'StdioAgentClient: stdout error');
       });
     }
@@ -103,7 +103,7 @@ export class StdioAgentClient implements AgentClient {
   private async callJsonRpcMethod(method: string, params?: JSONObject): Promise<JSONValue> {
     const requestId = this.nextRequestId++;
     
-    const jsonRpcRequest: STDIORequest = {
+    const jsonRpcRequest: StdioRequest = {
       jsonrpc: '2.0',
       id: requestId,
       method,
@@ -131,7 +131,7 @@ export class StdioAgentClient implements AgentClient {
   /**
    * Handle incoming JSON-RPC 2.0 response
    */
-  private handleJsonRpcResponse(response: STDIOResponse): void {
+  private handleJsonRpcResponse(response: StdioResponse): void {
     const reqIdStr = response.id.toString();
     const pending = this.pendingMcpRequests.get(reqIdStr);
     if (!pending) {
@@ -151,7 +151,7 @@ export class StdioAgentClient implements AgentClient {
   /**
    * Send a JSON-RPC 2.0 message to Cubicler via stdout
    */
-  private sendJsonRpcMessage(request: STDIORequest): void {
+  private sendJsonRpcMessage(request: StdioRequest): void {
     const messageStr = JSON.stringify(request) + '\n';
     // Best-effort write; in typical line-delimited usage this won't backpressure,
     // but if it does, allow Node to buffer and continue when drained.

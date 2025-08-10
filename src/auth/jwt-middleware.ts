@@ -9,7 +9,7 @@ import type { Logger } from 'pino';
 interface JWTHeader {
   alg: string;
   typ?: string;
-  [key: string]: unknown;
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 /**
@@ -23,7 +23,7 @@ export interface JWTPayload {
   iat?: number;
   nbf?: number;
   jti?: string;
-  [key: string]: unknown;
+  [key: string]: string | number | boolean | null | string[] | undefined;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface JWTPayload {
  */
 export interface JWTRequest extends Request {
   jwt?: JWTPayload;
-  user?: unknown;
+  user?: JWTPayload;
 }
 
 /**

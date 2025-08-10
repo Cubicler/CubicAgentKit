@@ -125,6 +125,24 @@ await agent.start()
 console.error('Stdio Agent ready'); // Use stderr for logging
 ```
 
+**⚠️ Important: NPX Execution Fix**
+
+When using stdio agents that can be executed via `npx`, ensure proper main module detection by checking both the standard import.meta.url comparison and the process arguments for your package name:
+
+```typescript
+// Only run if this is the main module (handle both direct execution and npx)
+const isMainModule = import.meta.url === `file://${process.argv[1]}` || 
+                     process.argv[1]?.includes('your-package-name');
+if (isMainModule) {
+  main().catch((error) => {
+    console.error('Unhandled error:', error);
+    process.exit(1);
+  });
+}
+```
+
+This prevents the common issue where stdio agents fail to start when executed via `npx` because `process.argv[1]` points to the npx wrapper instead of the actual module file.
+
 Configure in Cubicler's `agents.json`:
 
 ```json
